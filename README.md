@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertion layer landed. 91 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions and MCP server landed. 91 tests green.**
 
 | | |
 |---|---|
@@ -40,6 +40,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
 | Verify | 11 assertions gate every render — `block` / `warn` / **`hold`** |
+| Agent | MCP server over stdio: 9 tools, word-addressed editing, no frame arithmetic |
 
 ### Try it
 
@@ -119,6 +120,35 @@ Two rules the layer enforces that are easy to get wrong:
   not preferences. A standing instruction can override craft, norms and learned taste; it cannot
   switch off the things that exist to protect a viewer.
 
+### Driving it from an agent
+
+`sharpy-mcp` speaks JSON-RPC over stdio. Point any MCP client at the binary:
+
+```json
+{ "mcpServers": { "sharpy": { "command": "/path/to/.build/release/sharpy-mcp" } } }
+```
+
+Nine tools: `open_media`, `get_transcript`, `remove_words`, `tighten_pauses`, `get_report`,
+`get_timeline`, `verify`, `render`, `undo`.
+
+The interface follows one rule: **the agent addresses meaning, never frame arithmetic.**
+`remove_words` takes transcript indices; nothing asks an agent to multiply seconds by a frame
+rate. Three details that matter more than the tool list:
+
+- **Multi-granularity reads.** `get_transcript` returns sentence segments by default and words on
+  request, with a `firstWord` index to jump between them — comprehension does not cost the whole
+  word list.
+- **An explicit staleness contract.** Every mutation ends with *"WORD INDICES HAVE SHIFTED —
+  call get_transcript again"*, because an agent acting on a stale map is the most common failure
+  in this shape of tool.
+- **Refusals name the way out.** `remove_words` on a bad index reports the range that exists;
+  calling it before a transcript exists says which tool produces one.
+
+A recorded session on a real reel: open, report, read segments, drill to words, cut words 0–14
+(88.3 s → 82.7 s), tighten silences, verify — which correctly **blocks** on
+*"-20.68 LUFS is +2.32 LU from the -23.0 LUFS target"* — then render, which normalises and lands
+at exactly −23.0 LUFS (confirmed by ffmpeg), then undo.
+
 ## Architecture
 
 ```
@@ -130,7 +160,8 @@ SharpyRender      AVFoundation/VideoToolbox decode · single-pass Metal composit
 SharpyPerception  Apple Speech · Apple Vision · shot detection · content-addressed
                   index cache · the editor's report
 COCIO             C++ bridge emitting Metal Shading Language from OpenColorIO
-SharpyCLI         the command surface; the MCP server will expose the same operations
+SharpyCLI         the command surface
+SharpyMCP         the agent surface — JSON-RPC over stdio, same operations
 ```
 
 The engine is headless by construction. The M0 exit gate was *a complete edit driven by a script

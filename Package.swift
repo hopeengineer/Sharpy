@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "SharpyPerception", targets: ["SharpyPerception"]),
         .executable(name: "sharpy", targets: ["SharpyCLI"]),
         .executable(name: "sharpy-probe", targets: ["SharpyPerceptionProbe"]),
+        .executable(name: "sharpy-mcp", targets: ["SharpyMCP"]),
     ],
     dependencies: [
         // Local VLM/LLM inference (Qwen3-VL, Gemma 4 registered in VLMModelFactory). Pinned.
@@ -61,6 +62,13 @@ let package = Package(
             name: "SharpyPerception",
             dependencies: ["SharpyEngine", "SharpyRender"],
             path: "Sources/SharpyPerception",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // The agent surface: JSON-RPC over stdio, same operations as the CLI.
+        .executableTarget(
+            name: "SharpyMCP",
+            dependencies: ["SharpyEngine", "SharpyRender", "SharpyPerception"],
+            path: "Sources/SharpyMCP",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(

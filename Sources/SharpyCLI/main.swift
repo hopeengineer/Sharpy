@@ -186,7 +186,10 @@ case "render":
         for (i, c) in log.head.timeline.tracks[0].clips.enumerated() {
             print("  clip \(i): timeline \(c.range.start.frame(at: r))-\(c.range.end.frame(at: r))  ← source \(c.source.start.frame(at: r))-\(c.source.end.frame(at: r))")
         }
-        for did in log.head.decisionOrder { let d = log.head.decisions[did]!; print("  decision \(did): \(d.kind) @ frame \(d.at.frame(at: r))  basis=\(d.basis)") }
+        for e in log.head.uniqueDecisions {
+            let tracks = e.applications > 1 ? " ×\(e.applications) tracks" : ""
+            print("  decision \(e.id): \(e.decision.kind) @ frame \(e.decision.at.frame(at: r))\(tracks)  basis=\(e.decision.basis)")
+        }
         let replayed = try log.replay().id
         precondition(replayed == log.head.id, "replay integrity")
 

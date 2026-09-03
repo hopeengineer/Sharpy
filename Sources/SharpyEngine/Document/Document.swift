@@ -190,6 +190,22 @@ public struct Document: Sendable, Codable, Equatable {
     /// Content id of this state. Equal documents have equal ids — always, not usually.
     public var id: NodeID { Canonical.id(of: self) }
 
+    /// Distinct decisions in the order first made — the editorial history, with each act once.
+    /// A cut applied to linked picture and sound is one act, so `decisionOrder` records it twice
+    /// while this records it once, alongside how many tracks it touched.
+    public var uniqueDecisions: [(id: NodeID, decision: Decision, applications: Int)] {
+        var counts: [NodeID: Int] = [:]
+        var order: [NodeID] = []
+        for id in decisionOrder {
+            if counts[id] == nil { order.append(id) }
+            counts[id, default: 0] += 1
+        }
+        return order.compactMap { id in
+            guard let d = decisions[id] else { return nil }
+            return (id, d, counts[id] ?? 1)
+        }
+    }
+
     // MARK: canonical encoding
     //
     // `assets` and `decisions` are keyed by NodeID, not by String, so Codable's synthesised
