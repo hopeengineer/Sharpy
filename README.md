@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief and elicitation logging landed. 130 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. 141 tests green.**
 
 | | |
 |---|---|
@@ -39,7 +39,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
-| Verify | 11 assertions gate every render — `block` / `warn` / **`hold`** |
+| Verify | 16 assertions gate every render — `block` / `warn` / **`hold`** |
 | Agent | MCP server over stdio: 11 tools, word-addressed editing, no frame arithmetic |
 
 ### Try it
@@ -119,6 +119,17 @@ Two rules the layer enforces that are easy to get wrong:
 - **A client rule cannot override a safety constraint.** Flash limits and true-peak ceilings are
   not preferences. A standing instruction can override craft, norms and learned taste; it cannot
   switch off the things that exist to protect a viewer.
+
+Five of the sixteen need to have looked at the material, which is where a linter stops being a
+schema validator and starts catching what an editor would:
+
+| check | outcome | why that outcome |
+|---|---|---|
+| a cut lands inside a spoken word | `block` | the most audible edit fault there is, and there is no deliberate version |
+| a cut sits beside disputed speech | `hold` | where two ASR engines disagree is where meaning-inverting errors ship |
+| on-screen text leaves the title-safe area | `warn` | cropped on some displays, covered by platform UI on others |
+| text is up for less time than it takes to read | `warn` | a craft rule — neither FCC nor WCAG publishes a number |
+| a cut falls inside a shot rather than on its boundary | `warn` | a jump cut is legitimate as a device, jarring as an accident |
 
 ### Driving it from an agent
 

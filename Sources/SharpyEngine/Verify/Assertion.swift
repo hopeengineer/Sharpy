@@ -33,6 +33,11 @@ public struct AssertionFailure: Sendable, Equatable {
     /// to act on than it saves.
     public let at: TimeValue?
 
+    public init(assertion: String, category: AssertionCategory, mode: AssertionMode, detail: String, at: TimeValue?) {
+        self.assertion = assertion; self.category = category; self.mode = mode
+        self.detail = detail; self.at = at
+    }
+
     public var description: String {
         let when = at.map { String(format: " at %.2fs", $0.seconds.doubleValue) } ?? ""
         return "[\(mode.rawValue)] \(assertion)\(when): \(detail)"
@@ -42,6 +47,8 @@ public struct AssertionFailure: Sendable, Equatable {
 public struct VerificationResult: Sendable {
     public let failures: [AssertionFailure]
     public let checked: Int
+
+    public init(failures: [AssertionFailure], checked: Int) { self.failures = failures; self.checked = checked }
 
     public var blocking: [AssertionFailure] { failures.filter { $0.mode == .block } }
     public var warnings: [AssertionFailure] { failures.filter { $0.mode == .warn } }
@@ -97,6 +104,7 @@ public struct VerificationContext: Sendable {
 public struct Verifier: Sendable {
     public let assertions: [any Assertion]
     public init(assertions: [any Assertion]) { self.assertions = assertions }
+
 
     /// The set every project gets. A project adds its own; it cannot remove a `safety` one.
     public static let standard: Verifier = Verifier(assertions: [
