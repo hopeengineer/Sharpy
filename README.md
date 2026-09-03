@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions and MCP server landed. 106 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server and the falsifiable brief landed. 117 tests green.**
 
 | | |
 |---|---|
@@ -184,6 +184,11 @@ with no UI process in existence*, and it is met.
   meaning-inverting error the mechanism exists to catch.
 - **Unimplementable transforms refuse.** A colour transform needing LUTs the compositor cannot bind
   raises a named error rather than rendering wrong colour.
+- **The brief can be contradicted.** A one-line brief is unfalsifiable, which is exactly why
+  nothing catches its misreading — a serious video cut funny produces a *self-consistent wrong
+  answer*, and every downstream check validates against the misreading. Give the brief a register
+  and stakes and "made a serious video funny" becomes an assertion violation with a timecode.
+  A brief that compiles to nothing warns that it cannot catch a misreading.
 
 ## Requirements
 
