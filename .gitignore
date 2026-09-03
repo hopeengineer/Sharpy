@@ -10,3 +10,4 @@ bench/real/frames_*/
 bench/.venv/
 bench/models/
 *.log
+Package.resolved

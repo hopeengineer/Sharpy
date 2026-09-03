@@ -42,6 +42,9 @@ public enum CompositorError: Error, CustomStringConvertible {
 public final class MetalCompositor: @unchecked Sendable {
     public static let maxLayers = 8
     public let device: MTLDevice
+    /// The colour pipeline compiled into this compositor's kernel. Changing it needs a new
+    /// compositor: the transforms are specialised into the shader, not branched on per pixel.
+    public let colorPipeline: ColorPipeline
     private let queue: MTLCommandQueue
     private let pso: MTLComputePipelineState
     private let cache: CVMetalTextureCache
@@ -51,13 +54,16 @@ public final class MetalCompositor: @unchecked Sendable {
         var srcSize: SIMD2<Float>; var isBGRA: UInt32; var matrix: UInt32 = 0
     }
 
-    public init(device: MTLDevice? = MTLCreateSystemDefaultDevice()) throws {
+    public init(device: MTLDevice? = MTLCreateSystemDefaultDevice(),
+                colorPipeline: ColorPipeline = .passthrough) throws {
         guard let device else { throw CompositorError.noDevice }
         self.device = device
+        self.colorPipeline = colorPipeline
         guard let q = device.makeCommandQueue() else { throw CompositorError.noDevice }
         queue = q
+        let source = MetalCompositor.shaderSource(colorPipeline)
         let lib: MTLLibrary
-        do { lib = try device.makeLibrary(source: MetalCompositor.shaderSource, options: nil) }
+        do { lib = try device.makeLibrary(source: source, options: nil) }
         catch { throw CompositorError.shaderCompile(String(describing: error)) }
         guard let fn = lib.makeFunction(name: "composite") else { throw CompositorError.shaderCompile("missing kernel") }
         pso = try device.makeComputePipelineState(function: fn)
@@ -133,9 +139,16 @@ public final class MetalCompositor: @unchecked Sendable {
         return cb
     }
 
-    static let shaderSource = """
+    /// The kernel, with OCIO's generated transforms specialised in.
+    static func shaderSource(_ pipeline: ColorPipeline) -> String { header + pipeline.mslPrelude + body }
+
+    static let header = """
     #include <metal_stdlib>
     using namespace metal;
+
+    """
+
+    static let body = """
     struct Layer { float2 offset; float scale; float opacity; float2 srcSize; uint isBGRA; uint matrix; };
     // YCbCr -> RGB by the buffer's own matrix tag (0 = BT.709, 1 = BT.601, 2 = BT.2020), video or
     // full range. Colour management (OCIO-emitted MSL) replaces this stage; the tag stays the input.
@@ -167,10 +180,14 @@ public final class MetalCompositor: @unchecked Sendable {
             if (p.x < 0.0 || p.y < 0.0 || p.x >= L.srcSize.x || p.y >= L.srcSize.y) continue;
             float2 uv = p / L.srcSize;
             float3 c = (L.isBGRA == 1) ? p0[i].sample(s, uv).rgb : toRGB(p0[i].sample(s, uv).r, p1[i].sample(s, uv).rg, L.isBGRA == 2 ? 1u : 0u, L.matrix);
+            // Into the linear working space before blending: light adds, display code values do not.
+            c = SharpyInputTransform(float4(c, 1.0)).rgb;
             float la = L.opacity;
             rgb = c * la + rgb * (1.0 - la);
             a = la + a * (1.0 - la);
         }
+        // One display transform on the composited result.
+        rgb = SharpyOutputTransform(float4(rgb, 1.0)).rgb;
         out.write(float4(saturate(rgb), a), gid);
     }
     """

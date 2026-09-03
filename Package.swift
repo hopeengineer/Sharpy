@@ -1,13 +1,26 @@
 // swift-tools-version: 6.0
 // Sharpy — agent-first professional NLE for macOS. See docs/PLAN.md.
 import PackageDescription
+import Foundation
+
+// OpenColorIO comes from Homebrew (BSD-3-Clause). Locate it rather than hardcoding one prefix,
+// so the package builds on Apple Silicon (/opt/homebrew) and Intel (/usr/local) alike.
+let ocioPrefix: String = {
+    for p in ["/opt/homebrew/opt/opencolorio", "/usr/local/opt/opencolorio"] where FileManager.default.fileExists(atPath: p + "/include/OpenColorIO/OpenColorIO.h") {
+        return p
+    }
+    return "/opt/homebrew/opt/opencolorio"   // build fails with a clear "file not found" if absent
+}()
 
 let package = Package(
     name: "Sharpy",
     platforms: [.macOS(.v15)],
+    // The OCIO bridge is C++17.
+
     products: [
         .library(name: "SharpyEngine", targets: ["SharpyEngine"]),
         .library(name: "SharpyRender", targets: ["SharpyRender"]),
+        .library(name: "SharpyPerception", targets: ["SharpyPerception"]),
         .executable(name: "sharpy", targets: ["SharpyCLI"]),
         .executable(name: "sharpy-probe", targets: ["SharpyPerceptionProbe"]),
     ],
@@ -27,16 +40,32 @@ let package = Package(
             path: "Sources/SharpyEngine",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        // C++ bridge to OpenColorIO's GPU path: config → Metal Shading Language + LUTs.
+        .target(
+            name: "COCIO",
+            path: "Sources/COCIO",
+            cxxSettings: [.unsafeFlags(["-I\(ocioPrefix)/include", "-std=c++17"])],
+            linkerSettings: [.unsafeFlags(["-L\(ocioPrefix)/lib", "-lOpenColorIO",
+                                           "-Xlinker", "-rpath", "-Xlinker", "\(ocioPrefix)/lib"])]
+        ),
         // Decode → single-pass Metal composite → encode. Measured design (bench/).
         .target(
             name: "SharpyRender",
-            dependencies: ["SharpyEngine"],
+            dependencies: ["SharpyEngine", "COCIO"],
             path: "Sources/SharpyRender",
             swiftSettings: [.swiftLanguageMode(.v5)]   // AVFoundation/Metal types are not Sendable; audited by hand
         ),
+        // Perception that needs no model files: Apple Speech and Vision, both on-device.
+        // MLX-backed indexers live apart because anything linking MLX needs xcodebuild.
+        .target(
+            name: "SharpyPerception",
+            dependencies: ["SharpyEngine", "SharpyRender"],
+            path: "Sources/SharpyPerception",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "SharpyCLI",
-            dependencies: ["SharpyEngine", "SharpyRender"],
+            dependencies: ["SharpyEngine", "SharpyRender", "SharpyPerception"],
             path: "Sources/SharpyCLI",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
@@ -66,5 +95,12 @@ let package = Package(
             path: "Tests/SharpyRenderTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-    ]
+        .testTarget(
+            name: "SharpyPerceptionTests",
+            dependencies: ["SharpyEngine", "SharpyRender", "SharpyPerception"],
+            path: "Tests/SharpyPerceptionTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+    ],
+    cxxLanguageStandard: .cxx17
 )

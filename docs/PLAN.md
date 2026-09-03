@@ -416,24 +416,159 @@ gate is measured on the target machine.
   **no UI process in existence**.
 - **Gate:** ffmpeg build flags asserted LGPL in CI.
 
-**Status 2026-09-03 (evening) — M0 in progress.** Built and green: exact rational time and
-SMPTE drop-frame timecode (round-trip tested over every frame of an hour); the content-addressed
-document with the basis rule enforced at the type level and the confidence floor enforced in
-`apply`; the replayable command log; frame-accurate decode (`AVSampleCursor`-positioned seeks,
-explicit BT.709 tags, per-layer matrix in the kernel); the single-pass Metal compositor; and a
-render session driven from the CLI. **Script-driven edit gate met on real footage:**
-`sharpy render --asset reel-12-NOSFX.mp4 --cut 300-420` produced 2 529 frames in 3.9 s
-(646 fps, 1080×1920 ProRes), exactly 4.0 s shorter, output frame 300 = source frame 420
-(41.5 dB PSNR through the lossy round trip; the mismatched-frame control reads 23 dB).
-**30 tests pass** — including a canonical-form suite added after the CLI exposed a genuine
-defect the original tests had hidden: `Document`'s id was computed over Codable's synthesised
-encoding, which serialises id-keyed maps as *unkeyed* containers in Swift's per-process-randomised
-`Dictionary` order. The same document therefore hashed to one of n! values, so replay integrity,
-undo, branching and audit were all intermittently broken, and the 2-entry test agreed 50 % of the
-time. Fixed by encoding those maps as arrays sorted by id — deterministic by construction — with
-tests that fail reliably against the old behaviour. Open: OCIO inside the kernel (the ≥ 30 fps-with-colour gate), the LGPL CI
-assertion, audio, and the playback ring (render is still synchronous per frame). Code lives in
-`Sources/SharpyEngine`, `Sources/SharpyRender`, `Sources/SharpyCLI`.
+**Status 2026-09-03 (late evening) — M0 roughly two-thirds done. 33 tests green.**
+
+Built and verified: exact rational time and SMPTE drop-frame timecode (round-tripped over every
+frame of an hour); the content-addressed document with the basis rule enforced at the type level
+and the confidence floor enforced in `apply`; the replayable command log; frame-accurate decode
+(`AVSampleCursor`-positioned seeks, explicit BT.709 tags, per-layer YCbCr matrix in the kernel);
+the single-pass Metal compositor; **sample-accurate audio** — read, sum across tracks, and write.
+
+*Picture gate, on the user's reel:* `--cut 300-420` produced 2 529 frames, exactly 4.0 s shorter,
+output frame 300 = source frame 420 (41.5 dB PSNR; the mismatched-frame control reads 23 dB).
+
+*Audio gate, same render:* 4 046 400 samples = 84.3 s at 48 kHz alongside the picture. Output
+audio after the cut differs from source-plus-4 s by −35 to −39 dB (AAC re-encode residue) and
+from the wrong offset by −19 to −21 dB — louder than the signal itself, as uncorrelated audio
+must be. 974 fps at 1080×1920 ProRes.
+
+Two defects the tests caught, both fixed at the cause:
+- **Edit-point alignment was global.** `requireFrameAligned` was applied to every track, which
+  quantised audio cuts to 1/30 s. Alignment is now per track kind: video on the frame grid, audio
+  on the sample grid. At 29.97 fps one frame is 48000 × 1001/30000 = **1601.6 samples**, so a
+  frame boundary is not a sample boundary — audio takes the nearest sample (≤ 10.4 µs away).
+- **The writer deadlocked.** Writing all video then all audio hung indefinitely:
+  `AVAssetWriter` stalls an input that races ahead of its sibling, and polling
+  `isReadyForMoreMediaData` from the calling thread never clears. Both inputs are now driven by
+  `requestMediaDataWhenReady` on their own queues — the documented pattern.
+
+**Colour management gate — MET.** OpenColorIO 2.5.2 (BSD-3-Clause, Homebrew) is linked through a
+C++ bridge (`Sources/COCIO`) that emits Metal Shading Language and splices it into the compositor
+kernel. OCIO 2.5 ships the ACES configs built in (`ocio://default`), so nothing external is
+located or version-matched at runtime, and every ACES path in that config is analytic — zero LUT
+textures. A transform that *did* need LUTs is refused with a named error rather than rendering
+wrong colour.
+
+Measured on 4K ProRes, 600 frames per point:
+
+| layers | no colour management | ACEScg → linear → sRGB Display |
+|---|---|---|
+| 1 | 308.2 fps | 218.4 fps |
+| 2 | 177.7 fps | 162.0 fps |
+| **4** | **86.2 fps** | **83.4 fps ✓ gate (≥ 30)** |
+| 6 | 55.2 fps | 55.5 fps |
+
+**Colour costs ~3 % at four layers** — the margin survives easily, because the pipeline is
+decode-bound, not shader-bound. Reproduce with `sharpy bench --asset <4k> --color ACEScg`.
+
+Correctness is asserted against the published transfer functions, not self-consistency: linear
+→ sRGB matches IEC 61966-2-1 within 2 code values at three points; sRGB → ACEScg → sRGB round
+trips within 2; and a 50 % black/white mix renders as **188, not 128**, proving the blend happens
+in linear light rather than in display code values.
+
+**Loudness gate — MET.** EBU R128 / ITU-R BS.1770-4 is implemented in Swift: K-weighting
+derived from the analog prototype for whatever sample rate the audio actually is (hardcoding the
+48 kHz coefficients and feeding them 44.1 kHz gives a quietly wrong reading), both gates,
+loudness range, and true peak with 4× oversampling.
+
+Cross-checked against ffmpeg's `ebur128`, an independent implementation, on the user's reel:
+
+| | Sharpy | ffmpeg |
+|---|---|---|
+| integrated | −20.84 LUFS | −20.9 LUFS |
+| loudness range | 5.36 LU | 5.4 LU |
+| true peak | −1.50 dBTP | −1.5 dBFS |
+
+and on amplitude-0.2 tones at 60 / 1000 / 6000 Hz: −17.57 / −13.97 / −10.64 against ffmpeg's
+−17.6 / −14.0 / −10.6 — **agreement within 0.06 LU everywhere**, which validates the filter, the
+gating and the peak detector together.
+
+Normalisation is wired into render: `sharpy render … --loudness broadcast` measures the mix,
+applies the gain, and ffmpeg confirms the output at **exactly −23.0 LUFS**. The gain is capped by
+the true-peak ceiling and any shortfall is reported rather than papered over with a limiter —
+a limiter changes the sound, which is a creative decision, not a delivery step.
+
+**Deferred, with reason:** the playback ring. Render is synchronous per frame and still hits
+790–974 fps, so it is not the bottleneck for rendering; the ring only matters for interactive
+scrubbing, which needs the UI that arrives in M3. Building it now would be speculative.
+
+The LGPL assertion turned out moot: `otool -L` shows the binary links no ffmpeg at all — decode
+and encode are AVFoundation, ffmpeg is used only by `bench/`. The one third-party dylib is
+OpenColorIO (BSD-3-Clause).
+
+**M0 is complete. 48 tests green at that point; 65 now.**
+
+### M1 in progress — the perception index
+
+**Transcript and word-addressed editing.** `Transcript` / `Word` live in the engine, and the
+addressing rule is the point: *the agent names words, never frames*. `WordEdit` turns word indices
+into ranges, absorbing the surrounding pause so survivors do not end up double-spaced, merging
+consecutive removals into one cut, and reporting indices that do not exist rather than ignoring
+them. It refuses a track where transcript time is not timeline time instead of cutting in the
+wrong place. Apple's `SpeechAnalyzer` runs the live pass: 265 words off the user's reel at
+**61–79× realtime**.
+
+Two findings that changed the design, both from measurement:
+
+1. **Apple's ASR drops fillers entirely** — `fillers: 0` on a reel that audibly contains them.
+   For disfluency editing it is unusable, which is exactly why whisper-turbo is the verbatim
+   engine. The live pass and the authoritative pass are genuinely different jobs.
+2. **Word gaps are not silence.** Apple returns contiguous word timings: every "gap" on 88 s of
+   real narration was exactly 0.06 s or 0.12 s — the analyzer's quantisation — totalling 2.0 s.
+   Deriving pauses from them would find 28 imaginary ones. Measured from the waveform instead,
+   the same audio has **4 real silences totalling 0.90 s**. Dead air is an L1 signal fact and
+   nothing else will do.
+
+**Silence detection** follows the spec's own method: 25 ms frames, keep those above −45 dB, take
+the 55th percentile as the speech level, and judge silence *relative to that* rather than against
+an absolute dBFS — which is what lets one setting work on a quiet phone recording and a loud
+studio one. Runs are padded inward so a cut never clips a breath.
+
+**The two-engine confidence rule is implemented and tested.** `TranscriptMerge.agree` aligns by
+time overlap and requires equality after joining sub-word tokens. An early version used substring
+matching and the test caught it marking **"did" as agreeing with "didn't"** — precisely the one
+meaning-inverting error measured on real speech. It now errs toward *lower* confidence, because a
+false disagreement invites a check while a false agreement asserts a correctness nobody
+established.
+
+End to end on the user's reel: `sharpy render --tighten-pauses 0.3 --loudness broadcast` measures
+the speech level, removes signal-detected dead air, cuts picture and sound on their own grids, and
+delivers at **exactly −23.0 LUFS** (confirmed by ffmpeg) at 903 fps.
+
+**Vision indexing** (faces, hands, on-screen text) runs at 0.23 s per sampled frame on the reel,
+converting Vision's bottom-left normalised rects once, into top-left pixels, because every
+downstream consumer — safe areas, the ID pass, an agent reading a box — thinks that way. On the
+reel it reads **93 distinct lines** of on-screen text and tracks the subject across two runs.
+
+**The perception cache** keys every layer by a media fingerprint (size + mtime + first and last
+megabyte — hashing a 3 GB master would cost more than transcribing it) *and* an analyser version,
+so changing one analyser re-derives its own layer and leaves the others intact. A second report on
+the same file drops from 1.25 s to 0.84 s; the point is not those numbers but the VLM pass at
+~19 min/hour, which cannot be re-derived per question.
+
+**The M1 gate — the editor's report — is met.** Run on the user's reel it produces, unprompted:
+
+> 1080×1920 at 30, 1:28.30 long · portrait aspect — shot for a vertical feed
+> integrated loudness −20.8 LUFS, range 5.4 LU, true peak −1.5 dBTP
+> speech sits at −22.8 dBFS over a −47.5 dBFS floor — 25 dB of separation
+> 265 words in 1:28.30 — **180 words per minute**
+> 30 spoken segments; the piece opens *"This morning, my AI made my audio 3 times better…"*
+> a person is on screen in **78 %** of sampled frames; hands in **52 %** — a gesturing delivery
+> on-screen text in 82 % of frames, 93 distinct lines; the graphics read *"AGENT · RESULT" / "3x"*
+> the subject appears in 2 runs — the piece cuts away to graphics and back
+> **worth doing:** one unbroken stretch runs 15 s at 0:25.98 — the likeliest place to lose attention
+
+Nothing there could be said about an arbitrary video: it quotes the actual opening line, reads the
+actual graphics, and localises a real editorial weakness. That is the gate.
+
+One logic flaw the gate itself exposed and which is now fixed: the first version reported distance
+to *both* −14 LUFS streaming and −23 LUFS broadcast as problems. They are alternatives — no mix can
+satisfy both — so stating the distance to each is a fact, and only the true-peak ceiling, which
+every platform applies, is a problem.
+
+Still open in M1: whisper-turbo as the second ASR engine (needs the xcodebuild path), diarization,
+shot detection, and VLM scene semantics. Code: `Sources/SharpyEngine`, `Sources/SharpyRender`, `Sources/SharpyCLI`,
+`Sources/SharpyPerceptionProbe`.
 
 ### M1 — perception index
 - L0/L1 via ffmpeg filters; L2 via Apple ASR + whisper-verbatim, sherpa, Vision, TransNetV2,

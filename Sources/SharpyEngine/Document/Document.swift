@@ -14,6 +14,8 @@ import CryptoKit
 public struct NodeID: Hashable, Sendable, Codable, CustomStringConvertible {
     public let hex: String
     init(hashing data: Data) { hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    /// A stable id for arbitrary content — e.g. a media path, before the asset is in a document.
+    public init(contentOf string: String) { self.init(hashing: Data(string.utf8)) }
     init(hex: String) { self.hex = hex }
     public var description: String { String(hex.prefix(12)) }
 
@@ -76,9 +78,24 @@ public struct Track: Hashable, Sendable, Codable {
 public struct Timeline: Hashable, Sendable, Codable {
     public let name: String
     public let frameRate: FrameRate
+    /// Audio's own grid. Video edits land on frame boundaries; audio edits land on sample
+    /// boundaries, which are ~2000x finer — a cut that must land inside a syllable cannot be
+    /// quantised to 1/30 s without an audible click.
+    public let sampleRate: Int
     public let tracks: [Track]
-    public init(name: String, frameRate: FrameRate, tracks: [Track] = []) { self.name = name; self.frameRate = frameRate; self.tracks = tracks }
+    public init(name: String, frameRate: FrameRate, sampleRate: Int = 48_000, tracks: [Track] = []) {
+        precondition(sampleRate > 0, "sample rate must be positive")
+        self.name = name; self.frameRate = frameRate; self.sampleRate = sampleRate; self.tracks = tracks
+    }
     public var duration: TimeValue { tracks.flatMap(\.clips).map(\.end).max() ?? .zero }
+
+    /// The grid a given track's edit points must land on.
+    public func grid(for kind: TrackKind) -> Rational {
+        switch kind {
+        case .video: return frameRate.frameDuration
+        case .audio: return Rational(1, Int64(sampleRate))
+        }
+    }
 }
 
 // MARK: - Basis and Decision (spec §0, §1 L5)
@@ -243,6 +260,7 @@ public enum ApplyError: Error, Equatable, CustomStringConvertible {
     case overlap(existing: TimeRange, new: TimeRange)
     case sourceOutOfRange(asset: NodeID, source: TimeRange, duration: TimeValue)
     case notFrameAligned(TimeValue, FrameRate)
+    case notSampleAligned(TimeValue, Int)
     case belowConfidenceFloor(basis: Basis, floor: Rational)
     case emptyRange
 
@@ -253,6 +271,7 @@ public enum ApplyError: Error, Equatable, CustomStringConvertible {
         case .overlap(let e, let n): return "clip \(n) overlaps existing clip \(e)"
         case .sourceOutOfRange(let a, let s, let d): return "source range \(s) exceeds asset \(a) duration \(d)"
         case .notFrameAligned(let t, let r): return "\(t) is not on a frame boundary at \(r)"
+        case .notSampleAligned(let t, let sr): return "\(t) is not on a sample boundary at \(sr) Hz"
         case .belowConfidenceFloor(let b, let f): return "basis confidence \(b.confidence) is below the project floor \(f)"
         case .emptyRange: return "empty range"
         }
@@ -278,7 +297,8 @@ extension Document {
             return (d, Delta(before: before, after: d.id, decision: nil, shiftedTracks: []))
 
         case .addTrack(let kind, let name):
-            let t = Timeline(name: timeline.name, frameRate: timeline.frameRate, tracks: timeline.tracks + [Track(kind: kind, name: name)])
+            let t = Timeline(name: timeline.name, frameRate: timeline.frameRate, sampleRate: timeline.sampleRate,
+                             tracks: timeline.tracks + [Track(kind: kind, name: name)])
             let d = with(timeline: t)
             return (d, Delta(before: before, after: d.id, decision: nil, shiftedTracks: []))
 
@@ -289,8 +309,9 @@ extension Document {
             guard !(asset.duration < clip.source.end) else {
                 throw ApplyError.sourceOutOfRange(asset: clip.asset, source: clip.source, duration: asset.duration)
             }
-            try requireFrameAligned(clip.start)
             let track = timeline.tracks[trackIndex]
+            try requireAligned(clip.start, on: track.kind)
+            try requireAligned(clip.end, on: track.kind)
             if let hit = track.clips.first(where: { $0.range.overlaps(clip.range) }) {
                 throw ApplyError.overlap(existing: hit.range, new: clip.range)
             }
@@ -303,8 +324,8 @@ extension Document {
             try check(decision)
             guard timeline.tracks.indices.contains(trackIndex) else { throw ApplyError.noSuchTrack(trackIndex) }
             guard !range.isEmpty else { throw ApplyError.emptyRange }
-            try requireFrameAligned(range.start); try requireFrameAligned(range.end)
             let track = timeline.tracks[trackIndex]
+            try requireAligned(range.start, on: track.kind); try requireAligned(range.end, on: track.kind)
             var out: [Clip] = []
             for c in track.clips {
                 guard let cut = c.range.intersection(range) else {
@@ -341,13 +362,22 @@ extension Document {
         }
     }
 
-    private func requireFrameAligned(_ t: TimeValue) throws {
-        if !t.isFrameAligned(at: timeline.frameRate) { throw ApplyError.notFrameAligned(t, timeline.frameRate) }
+    /// Video edit points must sit on a frame boundary; audio edit points on a sample boundary.
+    /// Enforcing the video grid on audio would quantise every cut to 1/30 s — audible, and wrong.
+    private func requireAligned(_ t: TimeValue, on kind: TrackKind) throws {
+        switch kind {
+        case .video:
+            if !t.isFrameAligned(at: timeline.frameRate) { throw ApplyError.notFrameAligned(t, timeline.frameRate) }
+        case .audio:
+            if (t.seconds * Rational(Int64(timeline.sampleRate))).den != 1 {
+                throw ApplyError.notSampleAligned(t, timeline.sampleRate)
+            }
+        }
     }
 
     private func replacing(track index: Int, with track: Track) -> Document {
         var tracks = timeline.tracks; tracks[index] = track
-        return with(timeline: Timeline(name: timeline.name, frameRate: timeline.frameRate, tracks: tracks))
+        return with(timeline: Timeline(name: timeline.name, frameRate: timeline.frameRate, sampleRate: timeline.sampleRate, tracks: tracks))
     }
 
     private func recording(_ decision: Decision) -> (Document, NodeID) {
@@ -357,6 +387,23 @@ extension Document {
 }
 
 // MARK: - Command log
+
+extension Document {
+    /// Every audio track's clip covering `t`, with the source instant it maps to.
+    /// Unlike video these are summed, not stacked, so order carries no z-meaning.
+    public func audioClips(at t: TimeValue) -> [(trackIndex: Int, clip: Clip, sourceTime: TimeValue)] {
+        timeline.tracks.enumerated().compactMap { (i, track) in
+            guard track.kind == .audio, let clip = track.clips.first(where: { $0.range.contains(t) }) else { return nil }
+            return (i, clip, clip.source.start + (t - clip.start))
+        }
+    }
+
+    /// Contiguous audio segments on one track, in timeline order: what to read from where.
+    public func audioSegments(track index: Int) -> [(clip: Clip, timeline: TimeRange)] {
+        guard timeline.tracks.indices.contains(index), timeline.tracks[index].kind == .audio else { return [] }
+        return timeline.tracks[index].clips.map { ($0, $0.range) }
+    }
+}
 
 /// Append-only history. Replaying it from the initial document must reproduce the current id —
 /// that equality is the engine's integrity check and the basis of undo, branching and audit.
