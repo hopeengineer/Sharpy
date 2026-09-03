@@ -432,10 +432,9 @@ case "speakers":
         Task {
             do {
                 let indexer = SpeakerIndexer(clusterDistanceThreshold: option("--cluster-threshold").flatMap { Float($0) },
-                                             minClusterSize: option("--min-cluster").flatMap { Int($0) },
                                              numberOfSpeakers: option("--speakers").flatMap { Int($0) })
                 // A sweep must not read a cached answer computed with different settings.
-                if option("--cluster-threshold") != nil || option("--min-cluster") != nil || option("--speakers") != nil {
+                if option("--cluster-threshold") != nil || option("--speakers") != nil {
                     index = try await indexer.index(url: url, asset: NodeID(contentOf: path)); cached = false
                 } else {
                     (index, cached) = try await store.speakers(for: url, indexer: indexer)
@@ -536,7 +535,9 @@ default:
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
-      sharpy speakers <file> [--cluster-threshold F] [--min-cluster N] [--speakers N]
+      sharpy speakers <file> [--cluster-threshold F] [--speakers N]
+                            --speakers is exact; automatic counting over-counts on
+                            multi-speaker audio (bench/results/diarization_sweep.txt)
       sharpy silence <file> [--below dB] [--min seconds]
       sharpy loudness <file>
       sharpy colorspaces

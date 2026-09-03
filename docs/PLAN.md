@@ -637,15 +637,29 @@ the failure. Against four files of known truth:
 | three voices | 3 | **4** ✗ |
 | the user's reel | 1 | 1 ✓ |
 
-A systematic **+1 whenever more than one person speaks**. The spurious cluster is consistently
-tiny — 4 % / 7.0 s and 3 % / 6.8 s — which points at embedding windows straddling the boundaries
-of these test files, hard concatenations of separately recorded voices. Real conversational audio
-may not behave the same way, so **no correction is applied**: with two synthetic multi-speaker
-files, a "drop clusters under 5 %" rule fits the fixture rather than diarization.
-`numberOfSpeakers` is honoured exactly (forcing 2 gives 2, split 66/34 against an expected 62/38),
-so it is exposed and should be passed when the count is known. The measured baseline, sherpa-onnx
-pyannote-3.0 + eres2net, got 2 of 2 on the same audio at 13.8× realtime; SpeakerKit runs at ~280×,
-so speed is not the deciding axis. **Settling this needs a real multi-speaker recording.**
+A **sweep of the clustering parameters** (`bench/results/diarization_sweep.txt`) makes the finding
+sharper than "off by one". On the two-voice file the count reads **3 at every
+`clusterDistanceThreshold` from 0.50 to 1.20 and then drops straight to 1 at 1.30 — it never
+passes through 2.** No setting of that knob gets the file right. The extra cluster is not a
+loosely-attached fragment that a looser merge would absorb; it sits further from both real voices
+than they sit from each other. The three-voice file *is* fixable (4 → 3 at threshold 0.90–1.10),
+but that window leaves the two-voice file at 3, so there is no single correct setting and tuning
+to one is fitting the fixture. SpeakerKit's `minClusterSize` measured **completely inert** — 0, 3,
+6, 12, 25, 100 and 1000 all return the identical "3 speakers, 31 turns" — so it is no longer
+exposed: a public knob that provably does nothing invites an agent to fix over-counting with a
+lever connected to nothing.
+
+The likeliest cause is the fixture, not the model: these files are hard splices of separately
+recorded takes, and the extra cluster (7.0 s, 4 % of speech) sits across the seams, which real
+conversation does not have. That is a hypothesis, not a result.
+
+`numberOfSpeakers` is honoured exactly (forcing 2 gives 2, split 66/34 against an expected 62/38;
+forcing 3 gives 3 with the true seam at 62.05 s in every run), so it is exposed and should be
+passed when the count is known. The measured baseline, sherpa-onnx pyannote-3.0 + eres2net, got
+2 of 2 on the same audio at 13.8× realtime; SpeakerKit runs at ~280×, so speed is not the
+deciding axis — **on automatic counting this swap is a regression, and it stands only because the
+count is usually known.** Settling it needs a real multi-speaker recording, which no amount of
+`say` can synthesise.
 
 Still open in M2: resource claims and MCP Tasks for long operations. Still unbuilt: VLM scene
 semantics (the Swift probe works; wiring it into the index is the remaining M1 nicety), M3's

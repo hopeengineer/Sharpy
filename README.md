@@ -256,19 +256,29 @@ Diarization's **automatic speaker counting is not validated.** Against known tru
 | three voices | 3 | **4** ✗ |
 | a real single-speaker reel | 1 | 1 ✓ |
 
-It over-counts by exactly one whenever more than one person speaks. The spurious cluster is
-consistently tiny — 4 % / 7.0 s and 3 % / 6.8 s — which points at embedding windows straddling the
-boundaries of the test files, hard concatenations of separately recorded voices. Real
-conversational audio may behave differently, so **no "drop small clusters" correction is applied**:
-with two synthetic multi-speaker files that would be fitting a rule to the fixture rather than to
-diarization. `numberOfSpeakers` is honoured exactly, so pass it when the count is known.
+A sweep of the clustering parameters says the two-voice case is not reachable at all: the count
+reads **3 at every threshold from 0.50 to 1.20, then drops straight to 1** — it never passes
+through 2. The extra cluster is not a loose fragment a looser merge would absorb; it sits further
+from both real voices than they sit from each other. The three-voice file *is* fixable (4 → 3 at
+threshold 0.90–1.10), but that window leaves the two-voice file at 3, so no single setting is
+right on both and tuning to one would be fitting the fixture. SpeakerKit's `minClusterSize` turned
+out to be **completely inert** — 0 through 1000 all give the identical answer — so it is not
+exposed at all.
 
-The measured alternative, [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) pyannote-3.0 +
-eres2net, got 2 of 2 on the same audio. Settling this needs a real multi-speaker recording.
+The likeliest cause is the fixture rather than the model: these files are hard splices of
+separately recorded takes, and the extra cluster (7.0 s, 4 % of speech) sits across the seams.
+Real conversation has no such seams. That is a hypothesis, not a result.
+
+`numberOfSpeakers` is honoured exactly — `--speakers 2` gives 2, split 66/34 against an expected
+62/38 — so pass it when the count is known. The measured alternative,
+[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) pyannote-3.0 + eres2net, got 2 of 2 on the
+same audio, so this is a real regression against the baseline SpeakerKit replaced. Settling it
+needs a real multi-speaker recording, which no amount of `say` can synthesise.
 
 This section exists because the first version of this README claimed diarization was validated on
 the strength of a run against a *single-speaker* file — the one case that cannot expose the bias.
-The full comparison is in [`bench/results/swift_asr_diarization.txt`](bench/results/swift_asr_diarization.txt).
+The full comparison is in [`bench/results/swift_asr_diarization.txt`](bench/results/swift_asr_diarization.txt),
+the parameter sweep in [`bench/results/diarization_sweep.txt`](bench/results/diarization_sweep.txt).
 
 ## Requirements
 

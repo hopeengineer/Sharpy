@@ -1,0 +1,66 @@
+Diarization parameter sweep — SpeakerKit (pyannote via CoreML), argmax-oss-swift
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+Why this exists: SpeakerIndexer.swift cited this file for a calibration that had never been run.
+Either the citation goes or the sweep does. The sweep does.
+
+Material (bench/script_a|b|c.txt read by `say`, concatenated, 16 kHz mono):
+  one_voice.wav      62.0 s   truth 1   Samantha
+  two_voices.wav    202.8 s   truth 2   Samantha, Daniel, Samantha, Daniel
+  three_voices.wav  245.1 s   truth 3   + Karen, twice round
+  reel-12-NOSFX.mp4  88.0 s   truth 1   the user's real single-speaker recording
+
+--- clusterDistanceThreshold x minClusterSize, automatic counting ------------------
+
+th     one_voice  two_voices  three_voices  reel      (found/truth)
+0.50      1/1        3/2  X      4/3  X      1/1
+0.60      1/1        3/2  X      4/3  X      1/1
+0.70      1/1        3/2  X      4/3  X      1/1      <- SpeakerKit default region
+0.80      1/1        3/2  X      4/3  X      1/1
+0.90      1/1        3/2  X      3/3         1/1
+1.00      1/1        3/2  X      3/3         1/1
+1.10      1/1        3/2  X      3/3         1/1
+1.20      1/1        3/2  X      1/3  X      -
+1.30      1/1        1/2  X      1/3  X      -
+1.50      1/1        1/2  X      1/3  X      -
+2.00      1/1        1/2  X      1/3  X      -
+
+minClusterSize made NO difference at any threshold. Values 0, 3, 6, 12, 25, 100 and 1000 all
+returned an identical "3 speaker(s), 31 turn(s)" on two_voices. The parameter is inert on this
+path. It has therefore been REMOVED from SpeakerIndexer: a public knob that provably does nothing
+invites an agent to "fix" over-counting with a lever that is not connected to anything.
+
+--- what the sweep actually establishes ---------------------------------------------
+
+1. Automatic counting is not merely off by one on two_voices — it is UNREACHABLE by this knob.
+   The count goes 3, 3, 3, 3, 3, 3, 3, 3 and then straight to 1 at th=1.30. It never passes
+   through 2. No setting of clusterDistanceThreshold gets that file right. The earlier reading,
+   "a systematic +1", understated it: the third cluster is not a loosely-attached fragment that a
+   slightly looser merge would absorb, it is further from both real voices than they are from
+   each other.
+
+2. three_voices IS fixable, at th 0.90-1.10 (4 -> 3). But that window leaves two_voices at 3, so
+   there is no single setting that is correct on both. Tuning to one is fitting the fixture.
+
+3. The spurious cluster on two_voices is 7.0 s, 4 % of speech, and sits across the concatenation
+   seams. These files are hard splices of separately recorded takes, so the seams are more abrupt
+   than any real conversation. That is the most likely cause, and it is a property of my fixture,
+   not evidence about SpeakerKit on real audio.
+
+4. Forcing the count works and produces sensible splits:
+      two_voices   --speakers 2  -> 2 speakers, 66/34   (expected 62/38)
+      three_voices --speakers 3  -> 3 speakers, 54/33/13 (expected ~40/33/27)
+   The three-way split is skewed but the count and the handovers are right; handovers at 62.05 s
+   match the true seam in every run.
+
+--- verdict --------------------------------------------------------------------------
+
+Pass numberOfSpeakers whenever the count is known; it is exact.
+Automatic counting stays UNVALIDATED and is documented as such at the source, in the README and
+in the plan. The measured alternative (sherpa-onnx pyannote-3.0 + eres2net) got 2 of 2 on this
+same audio, so this is a real regression against the baseline SpeakerKit replaced — the ASR half
+of that swap is justified on measurement, the diarization half is not.
+
+Settling it needs a real multi-speaker recording, which no amount of `say` can synthesise.
+
+Reproduce: bench/README.md, "Re-measuring a swapped component".

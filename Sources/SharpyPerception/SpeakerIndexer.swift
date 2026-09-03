@@ -10,14 +10,20 @@
 // MEASURED LIMITATION — automatic speaker counting is not validated. Against known truth:
 //
 //     one voice     -> 1  correct        the user's real reel -> 1  correct
-//     two voices    -> 3  WRONG (+1)     three voices        -> 4  WRONG (+1)
+//     two voices    -> 3  WRONG          three voices        -> 4  WRONG
 //
-// It over-counts by exactly one whenever more than one person speaks, and the spurious cluster is
-// consistently tiny — 4 % / 7.0 s and 3 % / 6.8 s. That size and consistency point at windows
-// straddling the boundaries of the test files, which are hard concatenations of separate
-// recordings; real conversational audio may not behave the same way. So no "drop small clusters"
-// correction is applied here: with two synthetic multi-speaker files it would be fitting a rule to
-// the fixture rather than to diarization. Settling it needs a real multi-speaker recording.
+// It over-counts whenever more than one person speaks, and a threshold sweep says the two-voice
+// case is not reachable at all: the count reads 3 at every clusterDistanceThreshold from 0.50 to
+// 1.20 and then drops straight to 1 at 1.30, never passing through 2. The spurious cluster is not
+// a loosely-attached fragment a looser merge would absorb — it sits further from both real voices
+// than they sit from each other. three_voices IS fixable (4 -> 3 at threshold 0.90-1.10), but
+// that window leaves two_voices at 3, so no single setting is right on both, and tuning to one
+// would be fitting the fixture. Full sweep: bench/results/diarization_sweep.txt.
+//
+// The likeliest cause is my fixture, not the model: these files are hard splices of separately
+// recorded takes, and the extra cluster (7.0 s, 4 % of speech) sits across the seams. Real
+// conversation has no such seams. That is a hypothesis, not a result — settling it needs a real
+// multi-speaker recording, which no amount of `say` can synthesise.
 //
 // `numberOfSpeakers` is honoured exactly when supplied — forcing 2 on the two-voice file gives 2
 // with a 66/34 split against an expected 62/38 — so pass it when the count is known.
@@ -80,22 +86,23 @@ public struct SpeakerIndexer {
     /// "turn" is a crossfade artefact rather than somebody speaking.
     public let minimumTurn: TimeValue
     /// Agglomerative clustering cut-off. Lower splits one voice into several; higher merges two
-    /// people into one. Calibrated against known truth rather than taken from the default — see
+    /// people into one. Left at SpeakerKit's default because the sweep found no better value:
     /// `bench/results/diarization_sweep.txt`.
+    ///
+    /// SpeakerKit also takes a `minClusterSize`, which is deliberately NOT exposed here. It
+    /// measured completely inert — 0, 3, 6, 12, 25, 100 and 1000 all returned the identical
+    /// "3 speakers, 31 turns" on the two-voice file. A public knob that provably does nothing
+    /// invites an agent to fix over-counting with a lever that is not connected to anything.
     public let clusterDistanceThreshold: Float?
-    /// Smallest number of embedding windows that may form a speaker. This is the parameter that
-    /// suppresses a spurious extra voice assembled from a handful of scattered windows.
-    public let minClusterSize: Int?
-    /// When the count is known ahead of time, saying so beats any threshold.
+    /// When the count is known ahead of time, saying so beats any threshold. This is the only
+    /// parameter measured to actually control the outcome, and it controls it exactly.
     public let numberOfSpeakers: Int?
 
     public init(minimumTurn: TimeValue = TimeValue(seconds: Rational(3, 10)),
                 clusterDistanceThreshold: Float? = nil,
-                minClusterSize: Int? = nil,
                 numberOfSpeakers: Int? = nil) {
         self.minimumTurn = minimumTurn
         self.clusterDistanceThreshold = clusterDistanceThreshold
-        self.minClusterSize = minClusterSize
         self.numberOfSpeakers = numberOfSpeakers
     }
 
@@ -110,8 +117,7 @@ public struct SpeakerIndexer {
         catch { throw SpeakerIndexError.modelUnavailable(String(describing: error)) }
 
         let options = PyannoteDiarizationOptions(numberOfSpeakers: numberOfSpeakers,
-                                                 clusterDistanceThreshold: clusterDistanceThreshold,
-                                                 minClusterSize: minClusterSize)
+                                                 clusterDistanceThreshold: clusterDistanceThreshold)
         let result = try await kit.diarize(audioArray: samples, options: options, progressCallback: nil)
 
         let turns = result.segments.compactMap { segment -> SpeakerTurn? in

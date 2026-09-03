@@ -1,6 +1,8 @@
-// Speaker index logic. The model path itself was validated on the user's real reel — one speaker
-// correctly found (not hallucinated extras), 21 turns, 78.5 s of speech in 88 s, at 3x realtime.
-// These cover the reasoning built on top of that, which is where the editing decisions come from.
+// Speaker index logic — the reasoning built on top of diarization, which is where the editing
+// decisions come from. These do not test the model, and cannot: the model path's automatic
+// speaker counting is measured WRONG on multi-speaker audio (bench/results/diarization_sweep.txt).
+// It was once described here as "validated on the user's real reel", which was a single-speaker
+// file — the one case that cannot expose the failure. `numberOfSpeakers` is the exact path.
 
 import XCTest
 @testable import SharpyEngine
@@ -75,5 +77,19 @@ final class SpeakerIndexTests: XCTestCase {
                                     engines: ["whisper"])
         XCTAssertNil(transcript.labelled(with: conversation).words[0].speaker,
                      "guessing a speaker for speech nobody was diarized over would be a fabrication")
+    }
+
+    /// Pins the fact the WhisperKit swap rests on. WhisperKit transcribes two of the reference
+    /// audio's twelve "uh"s as "ah"; that costs nothing only because "ah" is a filler here. Drop
+    /// it from the set and disfluency editing silently regresses to 10 of 12 with no test failing
+    /// anywhere near the ASR code. See bench/results/swift_asr_diarization.txt.
+    func testAhCountsAsAFillerBecauseWhisperKitTranscribesUhThatWay() {
+        func word(_ text: String) -> Word {
+            Word(index: 0, text: text, range: TimeRange(start: s(0), end: s(1)), confidence: .one)
+        }
+        XCTAssertTrue(word("ah").isFiller)
+        XCTAssertTrue(word("Ah,").isFiller, "punctuation and case are the engine's business, not meaning's")
+        XCTAssertTrue(word("uh").isFiller)
+        XCTAssertFalse(word("a").isFiller, "the article is not a filler")
     }
 }

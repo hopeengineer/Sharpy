@@ -77,10 +77,11 @@ ffmpeg -i v1.aiff -i v2.aiff -i v1.aiff -i v2.aiff -filter_complex \
   "[0:a][1:a][2:a][3:a]concat=n=4:v=0:a=1,aresample=16000" -ac 1 two_voices.wav  # truth 2
 ffmpeg -i v1.aiff -i v2.aiff -i v3.aiff -i v1.aiff -i v2.aiff -i v3.aiff -filter_complex \
   "[0:a][1:a][2:a][3:a][4:a][5:a]concat=n=6:v=0:a=1,aresample=16000" -ac 1 three_voices.wav
-sharpy speakers two_voices.wav        # automatic — currently over-counts by one
+sharpy speakers two_voices.wav        # automatic — over-counts; --speakers N is exact
 ```
 
 Results and the verdict on each swap: `results/swift_asr_diarization.txt`.
+The clustering-parameter sweep behind the diarization verdict: `results/diarization_sweep.txt`.
 
 **Caveat that matters:** these multi-speaker files are hard concatenations of separately recorded
 voices, so their turn boundaries are harsher than real conversation. A diarization rule tuned to
