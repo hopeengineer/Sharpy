@@ -67,7 +67,7 @@ final class ToolTests: XCTestCase {
     // MARK: the tool surface itself
 
     func testEveryToolDeclaresANameDescriptionAndSchema() {
-        XCTAssertEqual(tools.count, 9)
+        XCTAssertEqual(tools.count, 11)
         for t in tools {
             let name = t["name"] as? String
             XCTAssertNotNil(name)
@@ -199,6 +199,33 @@ final class ToolTests: XCTestCase {
         XCTAssertFalse(r.isError, r.text)
         XCTAssertTrue(FileManager.default.fileExists(atPath: out.path))
         XCTAssertTrue(r.text.contains("rendered 60 frames"), "said: \(r.text)")
+    }
+
+    func testAskingAHumanIsLoggedAsADefectWithItsRetirementPath() {
+        let r = call("ask_human", ["category": "taste", "question": "which of these four takes reads best?"])
+        XCTAssertFalse(r.isError, r.text)
+        XCTAssertTrue(r.text.contains("style profile"), "the tool must name what would retire this question: \(r.text)")
+        XCTAssertEqual(session.elicitations.open.count, 1)
+    }
+
+    func testTheResidueCategoryDoesNotPretendToCollapse() {
+        let r = call("ask_human", ["category": "failure", "question": "no B-roll matches this claim — cut it or punch in?"])
+        XCTAssertFalse(r.isError, r.text)
+        XCTAssertTrue(r.text.contains("residue class"), "said: \(r.text)")
+    }
+
+    func testAskHumanRefusesAnUnknownCategoryAndListsTheRealOnes() {
+        let r = call("ask_human", ["category": "vibes", "question": "does this feel right?"])
+        XCTAssertTrue(r.isError)
+        XCTAssertTrue(r.text.contains("taste"))
+        XCTAssertTrue(r.text.contains("groundTruth"))
+    }
+
+    func testAutonomyReportReadsAsProgress() {
+        _ = call("ask_human", ["category": "intent", "question": "is the tangent at 14:20 on topic?"])
+        let r = call("autonomy_report")
+        XCTAssertFalse(r.isError, r.text)
+        XCTAssertTrue(r.text.contains("1 question"))
     }
 
     func testTightenPausesNeedsItsArgument() throws {

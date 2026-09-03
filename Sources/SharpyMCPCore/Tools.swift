@@ -123,8 +123,16 @@ public final class Session {
     public var transcript: Transcript?
     public let store: IndexStore
     public let sampleRate = 48_000
+    /// Every question the agent asks is logged as a defect with a burn-down, not as a feature.
+    public let elicitations: ElicitationLog
 
-    public init(storeRoot: URL? = nil) throws { store = try IndexStore(root: storeRoot) }
+    public init(storeRoot: URL? = nil) throws {
+        store = try IndexStore(root: storeRoot)
+        let logURL = (storeRoot ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Caches/Sharpy", isDirectory: true))
+            .appendingPathComponent("elicitations.json")
+        elicitations = ElicitationLog(url: logURL)
+    }
 
     public var document: Document? { log?.head }
 
@@ -217,6 +225,22 @@ public let tools: [[String: Any]] = [
                             "loudnessTarget": ["type": "string", "enum": ["broadcast", "streaming"]],
                         ],
                         "required": ["out"]],
+    ],
+    [
+        "name": "ask_human",
+        "description": "Ask the person a bounded question you cannot answer from the material, and log it. Every question is recorded as a DEFECT with a burn-down, not as a feature — the goal is to need this less over time. Choose the category honestly: taste (which take), intent (is this on topic), groundTruth (which face is the subject), permission (this cut drops the only mention of X), failure (no B-roll matches this claim). Four of those five should eventually be answered by an authored artefact instead of by asking.",
+        "inputSchema": ["type": "object",
+                        "properties": [
+                            "category": ["type": "string", "enum": ["taste", "intent", "groundTruth", "permission", "failure"]],
+                            "question": ["type": "string", "description": "The question, in the words the person will read. Bounded and specific."],
+                            "atSeconds": ["type": "number", "description": "Where in the material, when it is about a moment."],
+                        ],
+                        "required": ["category", "question"]],
+    ],
+    [
+        "name": "autonomy_report",
+        "description": "How close this is to needing no human: questions asked per hour of footage, broken down by category, and — the number that matters — how many answers produced nothing durable and will therefore be asked again. The set of categories with outstanding residue is the definition of what still needs a person.",
+        "inputSchema": ["type": "object", "properties": [:], "required": []],
     ],
     [
         "name": "undo",
@@ -459,6 +483,31 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 }
             }
             return toolResult(lines.joined(separator: "\n"))
+
+        case "ask_human":
+            guard let categoryName = args?["category"]?.stringValue,
+                  let category = ElicitationCategory(rawValue: categoryName) else {
+                return toolResult("ask_human needs a 'category': \(ElicitationCategory.allCases.map(\.rawValue).joined(separator: ", "))", isError: true)
+            }
+            guard let question = args?["question"]?.stringValue, !question.isEmpty else {
+                return toolResult("ask_human needs a 'question'.", isError: true)
+            }
+            let at = args?["atSeconds"]?.doubleValue.map { TimeValue(seconds: Rational(Int64($0 * 1000), 1000)) }
+            let id = session.elicitations.ask(category, question, at: at,
+                                              asset: session.mediaURL.map { NodeID(contentOf: $0.path) })
+            var out = "logged as \(category.rawValue) question \(id):\n  \(question)"
+            if let collapse = category.collapsesInto {
+                out += "\n  This class of question should eventually be answered by \(collapse) instead of by asking."
+            } else {
+                out += "\n  This is the residue class — it does not collapse into an authored artefact."
+            }
+            return toolResult(out)
+
+        case "autonomy_report":
+            if let url = session.mediaURL, let video = try? SequentialFrameSource(url: url) {
+                _ = video    // duration is recorded by the caller that actually handled the footage
+            }
+            return toolResult(session.elicitations.report().summary)
 
         case "undo":
             guard let log = session.log, !log.commands.isEmpty else {

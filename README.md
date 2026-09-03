@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server and the falsifiable brief landed. 117 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief and elicitation logging landed. 130 tests green.**
 
 | | |
 |---|---|
@@ -40,7 +40,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
 | Verify | 11 assertions gate every render — `block` / `warn` / **`hold`** |
-| Agent | MCP server over stdio: 9 tools, word-addressed editing, no frame arithmetic |
+| Agent | MCP server over stdio: 11 tools, word-addressed editing, no frame arithmetic |
 
 ### Try it
 
@@ -128,8 +128,8 @@ Two rules the layer enforces that are easy to get wrong:
 { "mcpServers": { "sharpy": { "command": "/path/to/.build/release/sharpy-mcp" } } }
 ```
 
-Nine tools: `open_media`, `get_transcript`, `remove_words`, `tighten_pauses`, `get_report`,
-`get_timeline`, `verify`, `render`, `undo`.
+Eleven tools: `open_media`, `get_transcript`, `remove_words`, `tighten_pauses`, `get_report`,
+`get_timeline`, `verify`, `render`, `undo`, `ask_human`, `autonomy_report`.
 
 The interface follows one rule: **the agent addresses meaning, never frame arithmetic.**
 `remove_words` takes transcript indices; nothing asks an agent to multiply seconds by a frame
@@ -148,6 +148,28 @@ A recorded session on a real reel: open, report, read segments, drill to words, 
 (88.3 s → 82.7 s), tighten silences, verify — which correctly **blocks** on
 *"-20.68 LUFS is +2.32 LU from the -23.0 LUFS target"* — then render, which normalises and lands
 at exactly −23.0 LUFS (confirmed by ffmpeg), then undo.
+
+### Toward needing no human
+
+The long-run target is an agent that edits without help, so **every question it asks is logged as
+a defect with a burn-down, not built as a feature.** `ask_human` records the question with a
+category, and `autonomy_report` gives the headline number: questions per hour of footage.
+
+Four of the five categories should collapse into an artefact authored once, which is the actual
+mechanism — not a better model, but moving the human's input from *during* the edit to *before* it:
+
+| category | retired by |
+|---|---|
+| taste — *which of these takes?* | a style profile learned from picks |
+| intent — *is this tangent on topic?* | the brief |
+| groundTruth — *which face is the subject?* | the enrollment registry |
+| permission — *this drops the only mention of X* | policy |
+| **failure** — *no B-roll matches this claim* | **nothing. This is the residue.** |
+
+The measurement that matters is not the count but whether an answer **compiled into something
+durable**. An answer that changed nothing means the same question returns, so the log counts it as
+residue — and the set of categories with outstanding residue is the working definition of what
+still needs a person.
 
 ## Architecture
 
