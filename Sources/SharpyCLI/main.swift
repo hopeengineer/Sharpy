@@ -329,7 +329,15 @@ case "verify":
             }
         }()
         let session = try RenderSession(document: log.head, options: RenderOptions(width: src.width, height: src.height, sampleRate: sampleRate, loudnessTarget: target))
-        let result = try session.verify()
+        // Bring in whatever perception is already cached; missing layers report that their checks
+        // could not run rather than passing silently.
+        let store = try IndexStore()
+        let url = URL(fileURLWithPath: assetPath)
+        let perception = PerceptionContext(transcript: try? store.load(MediaFingerprint(of: url))?.transcript,
+                                           vision: try? store.vision(for: url).0,
+                                           shots: try? store.shots(for: url).0,
+                                           width: src.width, height: src.height)
+        let result = try session.verify(using: Verifier.withPerception(perception))
         print(result.summary)
         for f in result.blocking { print("  ✗ \(f.description)") }
         for f in result.holds { print("  ⏸ \(f.description)") }

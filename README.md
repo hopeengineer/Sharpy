@@ -131,6 +131,17 @@ schema validator and starts catching what an editor would:
 | text is up for less time than it takes to read | `warn` | a craft rule — neither FCC nor WCAG publishes a number |
 | a cut falls inside a shot rather than on its boundary | `warn` | a jump cut is legitimate as a device, jarring as an accident |
 
+Run against the same real reel, the linter finds three genuine issues nobody flagged:
+
+```
+16 assertions: 0 blocking, 0 holds, 3 warnings
+  ⚠ on-screen text sits inside the title-safe area at 28.00s:
+      "WHAT THE NUMBER SAID" reaches outside the 90% safe area
+  ⚠ … at 44.00s: "WHAT IT STACKED TO GET THERE"
+  ⚠ … at 84.00s: "THE ONE THING IT WILL NEVER DO"
+  ✓ clear to render
+```
+
 ### Driving it from an agent
 
 `sharpy-mcp` speaks JSON-RPC over stdio. Point any MCP client at the binary:

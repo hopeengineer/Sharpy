@@ -183,7 +183,7 @@ public final class RenderSession {
     /// Check the document against its assertions without rendering anything.
     /// Loudness assertions need the mix measured, which costs a pass over the audio, so they only
     /// run when a target is set — asserting against a number nobody asked for would be theatre.
-    public func verify() throws -> VerificationResult {
+    public func verify(using verifier: Verifier? = nil) throws -> VerificationResult {
         var measured: Double?
         var peak: Double?
         var target: (integrated: Double, truePeakCeiling: Double)?
@@ -207,7 +207,7 @@ public final class RenderSession {
         }
         let context = VerificationContext(document: document, integratedLoudness: measured,
                                           truePeak: peak, loudnessTarget: target)
-        return (options.verifier ?? .standard).verify(context)
+        return (verifier ?? options.verifier ?? .standard).verify(context)
     }
 
     /// Render to `url`. Existing file is replaced.

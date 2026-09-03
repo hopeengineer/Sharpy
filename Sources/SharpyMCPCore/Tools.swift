@@ -463,7 +463,17 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
             let session2 = try RenderSession(document: doc, options: opts)
 
             if name == "verify" {
-                let result = try session2.verify()
+                // Include everything the perception index makes checkable. Layers already cached
+                // cost nothing; ones that are missing make their assertions report that they
+                // could not run, which is the honest outcome.
+                let cachedTranscript = session.transcript
+                let cachedVision = try? session.store.vision(for: url).0
+                let cachedShots = try? session.store.shots(for: url).0
+                let perception = PerceptionContext(transcript: cachedTranscript, vision: cachedVision,
+                                                   shots: cachedShots,
+                                                   width: video?.width ?? 1920, height: video?.height ?? 1080)
+                let verifier = Verifier.withPerception(perception)
+                let result = try session2.verify(using: verifier)
                 var out = [result.summary]
                 for f in result.blocking { out.append("  BLOCK  \(f.description)") }
                 for f in result.holds { out.append("  HOLD   \(f.description)") }
