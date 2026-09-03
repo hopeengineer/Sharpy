@@ -225,6 +225,12 @@ with no UI process in existence*, and it is met.
 - **Dead air is measured from the waveform.** Apple's word timings are contiguous — on 88 s of
   narration every "gap" was exactly 0.06 or 0.12 s, the analyzer's quantisation. The same audio
   has 4 real silences totalling 0.90 s.
+- **Two engines vote, and they are chosen to fail differently.** WhisperKit supplies the words,
+  Parakeet TDT v3 is the independent second opinion, and their agreement is the per-word
+  confidence. On the author's own footage, at *"agent didn't make it worse"*, Parakeet is right
+  while WhisperKit **and** Apple both drop the "n't" — so pairing WhisperKit with Apple would
+  *agree* on the inversion and stamp it high-confidence. Two engines are a gate because their
+  errors are uncorrelated, not because there are two of them.
 - **ASR was swapped only after re-measuring against the baseline it replaced.** WhisperKit scores
   **0.76 % WER against MLX whisper-turbo's 1.52 %** on the same reference audio, at 10× realtime
   versus 5×. Its two "lost" fillers are `uh` transcribed as `ah`, which `isFiller` still detects,
