@@ -32,6 +32,9 @@ let package = Package(
         // Tokenizer + Hub integration that mlx-swift-lm's MLXHuggingFace macros expand against.
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.9.0"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
+        // WhisperKit + SpeakerKit (pyannote diarization), MIT, CoreML — no Python, no MLX, so
+        // this builds under plain `swift build` unlike the MLX path.
+        .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", from: "1.0.0"),
     ],
     targets: [
         // The headless engine core. Pure value types, exact arithmetic, no UI, no media I/O.
@@ -61,7 +64,8 @@ let package = Package(
         // MLX-backed indexers live apart because anything linking MLX needs xcodebuild.
         .target(
             name: "SharpyPerception",
-            dependencies: ["SharpyEngine", "SharpyRender"],
+            dependencies: ["SharpyEngine", "SharpyRender",
+                           .product(name: "WhisperKit", package: "argmax-oss-swift")],
             path: "Sources/SharpyPerception",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

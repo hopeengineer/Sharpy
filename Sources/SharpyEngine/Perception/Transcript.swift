@@ -115,34 +115,85 @@ public struct Transcript: Sendable, Codable {
 // MARK: - Two-engine agreement
 
 public enum TranscriptMerge {
-    /// Align two transcripts of the same audio and produce one whose per-word confidence reflects
-    /// whether the engines agreed. Alignment is by time overlap rather than by sequence position,
-    /// because the engines tokenise differently — parakeet emits sub-word pieces that must be
-    /// glued back into words before they can be compared at all.
+    /// Align two transcripts of the same audio and set each word's confidence from whether the
+    /// engines agreed.
+    ///
+    /// Alignment is by **sequence**, not by time overlap. Time overlap is the obvious approach and
+    /// it fails badly: measured on real narration, WhisperKit and Apple place the same words up to
+    /// a few hundred milliseconds apart, so a word smears across two of its neighbours, the joined
+    /// text never matches, and 197 of 263 words came back "disputed" — a 75 % false-disagreement
+    /// rate that would make the confidence floor useless by holding everything.
+    ///
+    /// So this computes a longest common subsequence over the normalised words. A primary word on
+    /// that subsequence was said the same way by both engines; one that is not is a substitution,
+    /// insertion or deletion — a genuine disagreement.
+    ///
+    /// The DP is windowed by time rather than run over the whole transcript, because a full
+    /// alignment of an hour of speech is ~9 000 × 9 000 cells. Both transcripts describe the same
+    /// audio, so time is a reliable way to cut the problem into independent pieces.
     ///
     /// `primary` supplies the words and timings; `secondary` only votes.
     public static func agree(primary: Transcript, secondary: Transcript,
                              agreeing: Rational = Rational(95, 100),
-                             disagreeing: Rational = Rational(55, 100)) -> Transcript {
-        var merged: [Word] = []
-        merged.reserveCapacity(primary.words.count)
-        for w in primary.words {
-            let overlapping = secondary.words.filter { $0.range.overlaps(w.range) }
-            // Join, then require equality. Joining handles the real tokenisation difference —
-            // parakeet emits "tod" + "ay" for "today", which concatenates back to the word.
-            // Substring matching would be a disaster here: "did" is a prefix of "didn't", so a
-            // containment test marks the one meaning-inverting error we measured as *agreement*.
-            // Where the secondary tokenises more coarsely this yields a false disagreement, which
-            // is the safe direction — it lowers confidence and invites a check, rather than
-            // asserting a correctness the engines never established.
-            let joined = overlapping.map(\.normalised).joined()
-            let matched = !overlapping.isEmpty && joined == w.normalised
-            merged.append(Word(index: w.index, text: w.text, range: w.range,
-                               confidence: matched ? agreeing : disagreeing,
-                               speaker: w.speaker,
-                               sources: matched ? primary.engines + secondary.engines : primary.engines))
+                             disagreeing: Rational = Rational(55, 100),
+                             windowSeconds: Double = 30,
+                             slackSeconds: Double = 2) -> Transcript {
+        guard !primary.words.isEmpty else { return primary }
+        var agreed = Set<Int>()
+
+        let end = primary.words.last!.range.end.seconds.doubleValue
+        var windowStart = 0.0
+        while windowStart < end + windowSeconds {
+            let windowEnd = windowStart + windowSeconds
+            let mine = primary.words.filter {
+                let t = $0.range.start.seconds.doubleValue
+                return t >= windowStart && t < windowEnd
+            }
+            if mine.isEmpty { windowStart = windowEnd; continue }
+            // Slack either side, so a word near a window edge still finds its counterpart.
+            let theirs = secondary.words.filter {
+                let t = $0.range.start.seconds.doubleValue
+                return t >= windowStart - slackSeconds && t < windowEnd + slackSeconds
+            }
+            for index in matchedIndices(mine: mine, theirs: theirs) { agreed.insert(index) }
+            windowStart = windowEnd
+        }
+
+        let merged = primary.words.map { w in
+            let matched = agreed.contains(w.index)
+            return Word(index: w.index, text: w.text, range: w.range,
+                        // Never raise a word above what the primary engine itself claimed: two
+                        // engines agreeing on a word one of them was unsure of is still unsure.
+                        confidence: matched ? min(agreeing, w.confidence == .zero ? agreeing : max(w.confidence, agreeing)) : disagreeing,
+                        speaker: w.speaker,
+                        sources: matched ? primary.engines + secondary.engines : primary.engines)
         }
         return Transcript(asset: primary.asset, words: merged,
                           engines: primary.engines + secondary.engines, language: primary.language)
+    }
+
+    /// Indices (in the primary transcript's own numbering) of words on the longest common
+    /// subsequence of the two normalised token streams.
+    static func matchedIndices(mine: [Word], theirs: [Word]) -> [Int] {
+        let a = mine.map(\.normalised)
+        let b = theirs.map(\.normalised)
+        guard !a.isEmpty, !b.isEmpty else { return [] }
+
+        // Classic LCS table. Windowed, so this stays small.
+        var table = [[Int]](repeating: [Int](repeating: 0, count: b.count + 1), count: a.count + 1)
+        for i in stride(from: a.count - 1, through: 0, by: -1) {
+            for j in stride(from: b.count - 1, through: 0, by: -1) {
+                table[i][j] = a[i] == b[j] ? table[i + 1][j + 1] + 1
+                                           : max(table[i + 1][j], table[i][j + 1])
+            }
+        }
+        var out: [Int] = []
+        var i = 0, j = 0
+        while i < a.count && j < b.count {
+            if a[i] == b[j] { out.append(mine[i].index); i += 1; j += 1 }
+            else if table[i + 1][j] >= table[i][j + 1] { i += 1 }
+            else { j += 1 }
+        }
+        return out
     }
 }

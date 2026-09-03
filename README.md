@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. 141 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts working. 143 tests green.**
 
 | | |
 |---|---|
@@ -35,7 +35,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Render | Frame-accurate, sample-accurate audio, **903 fps** on a 1080×1920 timeline |
 | Colour | OpenColorIO 2.5.2, ACES built in. Linear→sRGB matches IEC 61966-2-1 within 2 code values |
 | Loudness | EBU R128 in Swift. Agrees with ffmpeg's `ebur128` within **0.06 LU** |
-| Speech | Apple `SpeechAnalyzer`, 61–79× realtime, word-level timings |
+| Speech | WhisperKit (verbatim, per-word probability) + Apple `SpeechAnalyzer`, voting per word |
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
@@ -88,6 +88,7 @@ sharpy render --asset in.mp4 --out out.mov --tighten-pauses 0.4
 ### Reading the material
 
 ```bash
+sharpy transcribe in.mp4 --voted                # two engines, per-word agreement
 sharpy transcribe in.mp4 --segments --fillers   # words with stable indices
 sharpy look in.mp4 --fps 1                      # faces, hands, on-screen text
 sharpy silence in.mp4                           # dead air, from the signal
@@ -222,10 +223,14 @@ with no UI process in existence*, and it is met.
 - **Dead air is measured from the waveform.** Apple's word timings are contiguous — on 88 s of
   narration every "gap" was exactly 0.06 or 0.12 s, the analyzer's quantisation. The same audio
   has 4 real silences totalling 0.90 s.
-- **Two ASR engines vote per word.** Every adjudicated error on real speech sat where whisper-turbo
-  and parakeet disagreed; where they agreed, both were right. The merge requires equality after
-  joining sub-word tokens — substring matching made *"did"* agree with *"didn't"*, the exact
-  meaning-inverting error the mechanism exists to catch.
+- **Two ASR engines vote per word**, and alignment is by *sequence*, not by time. Time overlap is
+  the obvious approach and it fails badly: the two engines place the same words up to a few hundred
+  milliseconds apart, so words smear across their neighbours and **197 of 263 came back "disputed"**
+  — a 75 % false-disagreement rate that would hold every render. A longest-common-subsequence
+  alignment, windowed by time so an hour of speech does not become a 9 000 × 9 000 table, brings
+  that to **22 of 263** — and those 22 are precisely the sites found by hand-adjudicating the same
+  reel against its on-screen cards: *"fix"* where Apple heard *"pick"*, *"decibels"* where it heard
+  *"decimals"*, and the one meaning inversion. The mechanism reproduces the manual analysis.
 - **Unimplementable transforms refuse.** A colour transform needing LUTs the compositor cannot bind
   raises a named error rather than rendering wrong colour.
 - **The brief can be contradicted.** A one-line brief is unfalsifiable, which is exactly why
@@ -239,6 +244,8 @@ with no UI process in existence*, and it is met.
 - macOS 26 or later, Apple silicon
 - Xcode 26 toolchain (Swift 6.3)
 - `brew install opencolorio` (BSD-3-Clause)
+- WhisperKit / SpeakerKit come from [argmax-oss-swift](https://github.com/argmaxinc/argmax-oss-swift)
+  (MIT, CoreML — no Python, no MLX), so the whole thing still builds with plain `swift build`
 - Anything linking MLX must be built with `xcodebuild` — SwiftPM cannot compile MLX's Metal shaders
 
 ## Licensing

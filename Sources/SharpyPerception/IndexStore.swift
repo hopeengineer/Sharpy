@@ -46,13 +46,17 @@ public struct PerceptionRecord: Sendable, Codable {
     public var transcript: Transcript?
     public var vision: VisionIndex?
     public var shots: ShotIndex?
+    /// The two-engine transcript: WhisperKit's words, Apple's vote, per-word agreement.
+    public var votedTranscript: Transcript?
     /// Analyser versions, so a changed algorithm invalidates its own layer and nothing else.
     public var producedBy: [String: String]
 
     public init(fingerprint: MediaFingerprint, path: String, transcript: Transcript? = nil,
-                vision: VisionIndex? = nil, shots: ShotIndex? = nil, producedBy: [String: String] = [:]) {
+                vision: VisionIndex? = nil, shots: ShotIndex? = nil, votedTranscript: Transcript? = nil,
+                producedBy: [String: String] = [:]) {
         self.fingerprint = fingerprint; self.path = path
         self.transcript = transcript; self.vision = vision; self.shots = shots
+        self.votedTranscript = votedTranscript
         self.producedBy = producedBy
     }
 }
@@ -65,6 +69,7 @@ public final class IndexStore {
         "transcript": "apple-speechanalyzer/1",
         "vision": "apple-vision/1",
         "shots": "histogram-content/1",
+        "votedTranscript": "whisperkit-large-v3-turbo+apple/1",
     ]
 
     public init(root: URL? = nil) throws {

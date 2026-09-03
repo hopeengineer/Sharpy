@@ -57,6 +57,51 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(t.lowConfidence(below: Rational(7, 10)).map(\.text), ["maybe"])
     }
 
+    /// Alignment must be by sequence, not by time. Measured on real narration, WhisperKit and
+    /// Apple place the same words hundreds of milliseconds apart; a time-overlap merge marked
+    /// 197 of 263 words disputed — 75 % false disagreement, which would hold every render.
+    func testOffsetTimingsDoNotCauseFalseDisagreement() {
+        func w(_ i: Int, _ text: String, _ a: Double, _ b: Double) -> Word {
+            Word(index: i, text: text,
+                 range: TimeRange(start: TimeValue(seconds: Rational(Int64(a * 1000), 1000)),
+                                  end: TimeValue(seconds: Rational(Int64(b * 1000), 1000))),
+                 confidence: Rational(9, 10))
+        }
+        let primary = Transcript(asset: NodeID(contentOf: "x"),
+                                 words: [w(0, "this", 0.00, 0.48), w(1, "morning", 0.48, 1.02), w(2, "my", 1.02, 1.14)],
+                                 engines: ["whisper"])
+        // The same words, every timing shifted by a third of a second.
+        let secondary = Transcript(asset: NodeID(contentOf: "x"),
+                                   words: [w(0, "this", 0.34, 0.70), w(1, "morning", 0.96, 1.40), w(2, "my", 1.40, 1.60)],
+                                   engines: ["apple"])
+        let merged = TranscriptMerge.agree(primary: primary, secondary: secondary)
+        for word in merged.words {
+            XCTAssertGreaterThan(word.confidence, Rational(9, 10),
+                                 "\"\(word.text)\" is identical in both engines and must agree despite the offset")
+        }
+    }
+
+    func testAlignmentSurvivesAnInsertionInTheMiddle() {
+        func w(_ i: Int, _ text: String, _ a: Double) -> Word {
+            Word(index: i, text: text,
+                 range: TimeRange(start: TimeValue(seconds: Rational(Int64(a * 100), 100)),
+                                  duration: TimeValue(seconds: Rational(10, 100))),
+                 confidence: Rational(9, 10))
+        }
+        let primary = Transcript(asset: NodeID(contentOf: "x"),
+                                 words: [w(0, "get", 0), w(1, "my", 1), w(2, "voice", 2), w(3, "closer", 3)],
+                                 engines: ["whisper"])
+        // Secondary heard an extra word and got one wrong.
+        let secondary = Transcript(asset: NodeID(contentOf: "x"),
+                                   words: [w(0, "get", 0), w(1, "my", 1), w(2, "own", 2), w(3, "voice", 3), w(4, "close", 4)],
+                                   engines: ["apple"])
+        let merged = TranscriptMerge.agree(primary: primary, secondary: secondary)
+        XCTAssertGreaterThan(merged.words[0].confidence, Rational(9, 10), "get")
+        XCTAssertGreaterThan(merged.words[1].confidence, Rational(9, 10), "my")
+        XCTAssertGreaterThan(merged.words[2].confidence, Rational(9, 10), "voice survives the inserted word")
+        XCTAssertLessThan(merged.words[3].confidence, Rational(7, 10), "closer vs close is a real disagreement")
+    }
+
     /// The measured finding this encodes: errors live where two engines disagree.
     func testAgreementRaisesConfidenceAndDisagreementLowersIt() {
         let primary = Transcript(asset: NodeID(contentOf: "x"),
@@ -66,7 +111,7 @@ final class TranscriptTests: XCTestCase {
                                    words: [Self.w(0, "did", 0, 300), Self.w(1, "make", 300, 600)],
                                    engines: ["parakeet"])
         let merged = TranscriptMerge.agree(primary: primary, secondary: secondary)
-        XCTAssertLessThan(merged.words[0].confidence, Rational(7, 10), "engines disagree on 'didn't' vs 'did'")
+        XCTAssertLessThan(merged.words[0].confidence, Rational(7, 10), "engines disagree on 'didn\'t' vs 'did'")
         XCTAssertGreaterThan(merged.words[1].confidence, Rational(9, 10), "engines agree on 'make'")
         XCTAssertEqual(merged.words[1].sources, ["whisper-turbo", "parakeet"])
         XCTAssertEqual(merged.text, primary.text, "the primary engine still supplies the words")

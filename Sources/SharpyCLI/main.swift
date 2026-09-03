@@ -272,7 +272,10 @@ case "transcribe":
         do {
             if #available(macOS 26.0, *) {
                 let t0 = Date()
-                let t = try await SpeechIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
+                let store = try IndexStore()
+                let voted = argv.contains("--voted")
+                let t = voted ? try await store.votedTranscript(for: url).0
+                              : try await SpeechIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
                 let dt = Date().timeIntervalSince(t0)
                 let dur = try AudioSource(url: url).duration.seconds.doubleValue
                 print(String(format: "%d words in %.1f s  (%.0f s audio, %.0f× realtime)  engines: %@",
@@ -281,6 +284,15 @@ case "transcribe":
                     for s in t.segments() { print(String(format: "  [%5d] %7.2f–%7.2f  %@", s.firstWord, s.range.start.seconds.doubleValue, s.range.end.seconds.doubleValue, s.text)) }
                 } else {
                     print(t.text)
+                }
+                if voted {
+                    let disputed = t.lowConfidence(below: Rational(7, 10))
+                    print("disputed by the two engines: \(disputed.count) word(s)")
+                    for w in disputed.prefix(20) {
+                        print(String(format: "  word %d  %7.2f–%7.2f  \"%@\"  confidence %@", w.index,
+                                     w.range.start.seconds.doubleValue, w.range.end.seconds.doubleValue,
+                                     w.text, "\(w.confidence)"))
+                    }
                 }
                 if argv.contains("--fillers") {
                     let f = t.fillers
@@ -471,7 +483,7 @@ default:
                     [--cut a-b]... [--loudness broadcast|streaming|<LUFS>]
                     [--remove-fillers] [--remove-words 1,5,10-12] [--tighten-pauses <seconds>]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--frames N] [--color <space>] [--display <space>]
-      sharpy transcribe <file> [--segments] [--fillers] [--pauses <seconds>]
+      sharpy transcribe <file> [--voted] [--segments] [--fillers] [--pauses <seconds>]
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
