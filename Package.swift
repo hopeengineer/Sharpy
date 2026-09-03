@@ -21,6 +21,7 @@ let package = Package(
         .library(name: "SharpyEngine", targets: ["SharpyEngine"]),
         .library(name: "SharpyRender", targets: ["SharpyRender"]),
         .library(name: "SharpyPerception", targets: ["SharpyPerception"]),
+        .library(name: "SharpyMCPCore", targets: ["SharpyMCPCore"]),
         .executable(name: "sharpy", targets: ["SharpyCLI"]),
         .executable(name: "sharpy-probe", targets: ["SharpyPerceptionProbe"]),
         .executable(name: "sharpy-mcp", targets: ["SharpyMCP"]),
@@ -64,10 +65,17 @@ let package = Package(
             path: "Sources/SharpyPerception",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-        // The agent surface: JSON-RPC over stdio, same operations as the CLI.
+        // The agent surface. Tools live in a library so they can be tested without a process;
+        // the executable is transport only.
+        .target(
+            name: "SharpyMCPCore",
+            dependencies: ["SharpyEngine", "SharpyRender", "SharpyPerception"],
+            path: "Sources/SharpyMCPCore",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "SharpyMCP",
-            dependencies: ["SharpyEngine", "SharpyRender", "SharpyPerception"],
+            dependencies: ["SharpyMCPCore"],
             path: "Sources/SharpyMCP",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
@@ -101,6 +109,12 @@ let package = Package(
             name: "SharpyRenderTests",
             dependencies: ["SharpyEngine", "SharpyRender"],
             path: "Tests/SharpyRenderTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "SharpyMCPTests",
+            dependencies: ["SharpyEngine", "SharpyMCPCore"],
+            path: "Tests/SharpyMCPTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

@@ -566,8 +566,42 @@ to *both* −14 LUFS streaming and −23 LUFS broadcast as problems. They are al
 satisfy both — so stating the distance to each is a fact, and only the true-peak ceiling, which
 every platform applies, is a problem.
 
+**Shot detection** landed: a histogram content detector over a decoder-scaled proxy, with the
+threshold derived from the material's own score distribution rather than fixed. A locked-off
+interview has almost no frame-to-frame change, so a constant threshold finds nothing there and
+fires constantly on handheld — the same principle as judging silence against the recording's own
+speech level. On the reel: **51 shots, median 1.0 s**, and it localises *"one shot runs 10 s at
+0:40.67, 10× the median — the pacing stalls here"*.
+
+### M2 in progress — decisions, assertions, the agent surface
+
+**Assertions gate the render.** Eleven checks across provenance, structure, audio and safety run
+before a frame is written; a blocking failure refuses outright. Three outcomes, and the third is
+the one most tools omit: `block`, `warn`, and **`hold`** — everything passed and confidence is
+still too low to ship unattended. *"No assertion failed"* and *"fit to publish"* are different
+claims, and an autonomous system needs the right to abstain.
+
+Two rules enforced there are easy to get backwards: **a check that cannot run fails** (set a
+loudness target without measuring the mix and it reports that it could not run, rather than
+passing quietly), and **a client rule cannot override a safety constraint** — a standing
+instruction may override craft, norms and learned taste, never a flash limit or a true-peak
+ceiling.
+
+**The MCP server is the agent surface**: JSON-RPC over stdio, nine tools, built on the rule that
+the agent addresses meaning and never frame arithmetic. A test asserts that literally — no tool
+schema may expose a property whose name contains "frame" or "timecode". `get_transcript` reads at
+sentence granularity by default and word granularity on request; every mutation ends with *"WORD
+INDICES HAVE SHIFTED"*; refusals name the way out. Tools live in a library so they are tested
+directly rather than by spawning a process, and the executable is transport only.
+
+Driven end to end on the user's reel: open → report → segments → words → cut 0–14
+(88.3 s → 82.7 s) → tighten silences → verify, which correctly **blocked** with *"−20.68 LUFS is
++2.32 LU from the −23.0 LUFS target"* → render, which normalised to exactly −23.0 LUFS as
+confirmed by ffmpeg → undo.
+
 Still open in M1: whisper-turbo as the second ASR engine (needs the xcodebuild path), diarization,
-shot detection, and VLM scene semantics. Code: `Sources/SharpyEngine`, `Sources/SharpyRender`, `Sources/SharpyCLI`,
+and VLM scene semantics. Still open in M2: the falsifiable brief, resource claims, elicitation
+logging, and MCP Tasks for long operations. Code: `Sources/SharpyEngine`, `Sources/SharpyRender`, `Sources/SharpyCLI`,
 `Sources/SharpyPerceptionProbe`.
 
 ### M1 — perception index

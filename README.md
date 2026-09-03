@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions and MCP server landed. 91 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions and MCP server landed. 106 tests green.**
 
 | | |
 |---|---|
@@ -161,7 +161,8 @@ SharpyPerception  Apple Speech · Apple Vision · shot detection · content-addr
                   index cache · the editor's report
 COCIO             C++ bridge emitting Metal Shading Language from OpenColorIO
 SharpyCLI         the command surface
-SharpyMCP         the agent surface — JSON-RPC over stdio, same operations
+SharpyMCPCore     the tool surface — session state and every tool, testable directly
+SharpyMCP         transport only: JSON-RPC over stdio
 ```
 
 The engine is headless by construction. The M0 exit gate was *a complete edit driven by a script
