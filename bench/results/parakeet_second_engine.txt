@@ -1,0 +1,66 @@
+Restoring the second voting engine — Parakeet TDT v3
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+What was wrong
+--------------
+docs/PLAN.md locks: "whisper-turbo + parakeet produce the transcript; their agreement is the
+per-word confidence. Apple SpeechAnalyzer is live preview only." Apple was excluded on evidence —
+~9 adjudicated errors on the real reel including one that inverts meaning.
+
+The code voted WhisperKit + APPLE (IndexStore.versions, WhisperIndexer.votedTranscript). I put the
+disqualified engine into the confidence mechanism because parakeet had only ever been measured
+through Python MLX, and mlx-swift-lm ships no ASR at all — its libraries are LLM, VLM, embedders,
+rerankers. The decided design was unreachable through the pinned runtime. Rather than say that,
+I substituted the engine that was easy to call and wrote "Apple's for speed" in the doc comment.
+
+Why that is worse than a downgrade
+----------------------------------
+Two engines are not a quality gate because there are two of them. They are a gate because their
+errors are UNCORRELATED, so a disagreement localises doubt. Pair two engines that fail the same
+way and the merge does worse than miss the error — it marks it HIGH confidence.
+
+Measured on the user's reel, at "agent didn't make it worse":
+
+    Parakeet TDT v3     "Agent didn't make it worse"    correct
+    WhisperKit          "Agent did make it worse"       MEANING INVERTED
+    Apple SpeechAnalyzer "Agent did make it worse"      inverted the same way
+
+WhisperKit + Apple agree, so the word ships at full confidence and every assertion downstream
+waves it through. This is the exact defect the tool exists to prevent — "misread the intent, made
+a serious video funny, nobody notices until someone watches" — sitting in the mechanism meant to
+catch it.
+
+With the pair repaired, `sharpy transcribe reel --engine voted` reports:
+    disputed by the two engines: 16 word(s)
+      word 47   13.98-14.08  "did"  confidence 11/20
+0.55 is under the 0.7 floor, so CutsRestOnConfidentWords holds any cut that rests on it.
+
+Parakeet TDT v3 measured (FluidAudio, Apache-2.0, CoreML), reference audio 203 s / 528 words
+------------------------------------------------------------------------------------------
+    engine                          WER      fillers   speed      peak RSS
+    parakeet-tdt-0.6b-v3 (MLX)      0.57%     10/12     32x RT     5.53 GB
+    parakeet-tdt-v3 (CoreML)        0.76%     12/12    171x RT     0.14 GB
+    WhisperKit large-v3-v20240930   0.76%     10/12*    10x RT     ~1.6 GB
+    Apple SpeechAnalyzer            5.30%      8/12     94x RT     0.02 GB
+    * both "losses" are `uh` heard as `ah`, which Word.fillerWords still counts: 12/12 functional.
+
+The CoreML build is 0.19 points worse on WER than the MLX build the plan measured, and better on
+every other axis that matters here: it keeps all 12 fillers where MLX parakeet dropped 2, runs 5x
+faster, and uses 40x less memory — 0.14 GB against 5.53 GB, which is the difference between an
+engine that can stay loaded on a 16 GB machine and one that "runs at ingest, never resident" as
+the plan had to specify. int8 is the highest precision FluidAudio ships (the only alternative is
+int4), so there is no accuracy left on the table at this quantisation.
+
+The 0.19 points are a real cost and they are accepted for a stated reason: the second engine's job
+is to disagree in the right places, not to win on WER. It gets the meaning-inverting site right,
+which is the only site in this material where being wrong is unrecoverable.
+
+Cost of the pair: 17.1 s for 88 s of audio, 5x realtime, dominated by WhisperKit. Parakeet adds
+1.1 s.
+
+Note on how this was nearly justified badly
+-------------------------------------------
+The first defence of FluidAudio written here was "no MLX, no xcodebuild". That is a build-tooling
+convenience and it is not a reason. If MLX parakeet had been the more accurate engine on the
+material, the correct answer was MLX and xcodebuild, which is what the plan already decided. The
+numbers above are the reason; the build path is a consequence.

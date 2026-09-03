@@ -70,7 +70,7 @@ public final class IndexStore {
         "transcript": "apple-speechanalyzer/1",
         "vision": "apple-vision/1",
         "shots": "histogram-content/1",
-        "votedTranscript": "whisperkit-large-v3-turbo+apple/1",
+        "votedTranscript": "whisperkit-large-v3-turbo+parakeet-tdt-v3/2",
         "speakers": "speakerkit-pyannote/1",
     ]
 

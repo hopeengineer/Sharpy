@@ -281,7 +281,8 @@ case "transcribe":
                 case "whisper": t = try await WhisperIndexer(model: option("--model") ?? "large-v3-v20240930")
                                              .transcribe(url: url, asset: NodeID(contentOf: path))
                 case "apple":   t = try await SpeechIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
-                default: fail("unknown --engine \(engine); use apple, whisper or voted")
+                case "parakeet": t = try await ParakeetIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
+                default: fail("unknown --engine \(engine); use apple, whisper, parakeet or voted")
                 }
                 let dt = Date().timeIntervalSince(t0)
                 let dur = try AudioSource(url: url).duration.seconds.doubleValue

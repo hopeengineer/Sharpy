@@ -81,12 +81,25 @@ public struct WhisperIndexer {
 }
 
 extension IndexStore {
-    /// The authoritative transcript: Apple's for speed, WhisperKit's for the words, and their
-    /// agreement for the per-word confidence. Where the two disagree the confidence drops, which
-    /// is what makes `CutsRestOnConfidentWords` able to hold a render.
+    /// The authoritative transcript: WhisperKit supplies the words, Parakeet is the independent
+    /// second opinion, and their agreement is the per-word confidence. Where they disagree the
+    /// confidence drops, which is what makes `CutsRestOnConfidentWords` able to hold a render.
+    ///
+    /// The second engine is Parakeet and NOT Apple's SpeechAnalyzer, and the reason is measurable
+    /// on the user's own reel. At the phrase "agent didn't make it worse":
+    ///
+    ///     Parakeet    "Agent didn't make it worse"   correct
+    ///     WhisperKit  "Agent did make it worse"      WRONG — the meaning is inverted
+    ///     Apple       "Agent did make it worse"      WRONG — the same way
+    ///
+    /// Pairing WhisperKit with Apple therefore does worse than fail to catch this: the two agree,
+    /// so the merge marks the inverted word HIGH confidence and every assertion downstream waves
+    /// it through. A second engine is only worth having if its errors are uncorrelated with the
+    /// first's, which is an argument for a different architecture and different training data,
+    /// not for whichever engine is cheapest to call.
     @available(macOS 26.0, *)
     public func votedTranscript(for url: URL,
-                                apple: SpeechIndexer = SpeechIndexer(),
+                                parakeet: ParakeetIndexer = ParakeetIndexer(),
                                 whisper: WhisperIndexer = WhisperIndexer()) async throws -> (Transcript, Bool) {
         let fingerprint = try MediaFingerprint(of: url)
         var record = load(fingerprint) ?? PerceptionRecord(fingerprint: fingerprint, path: url.path)
@@ -97,7 +110,7 @@ extension IndexStore {
         let asset = NodeID(contentOf: url.path)
         // WhisperKit supplies the words — it is the verbatim engine, and Apple drops fillers.
         let primary = try await whisper.transcribe(url: url, asset: asset)
-        let secondary = try await apple.transcribe(url: url, asset: asset)
+        let secondary = try await parakeet.transcribe(url: url, asset: asset)
         let voted = TranscriptMerge.agree(primary: primary, secondary: secondary)
         record.votedTranscript = voted
         record.producedBy["votedTranscript"] = version

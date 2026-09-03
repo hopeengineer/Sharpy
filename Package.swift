@@ -35,6 +35,10 @@ let package = Package(
         // WhisperKit + SpeakerKit (pyannote diarization), MIT, CoreML — no Python, no MLX, so
         // this builds under plain `swift build` unlike the MLX path.
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", from: "1.0.0"),
+        // Parakeet TDT v3 on CoreML. The plan locks parakeet as the SECOND voting engine —
+        // agreement between two independent engines is the per-word confidence — and mlx-swift-lm
+        // ships no ASR at all, so the decided design was unreachable through the pinned runtime.
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.1.0"),
     ],
     targets: [
         // The headless engine core. Pure value types, exact arithmetic, no UI, no media I/O.
@@ -66,7 +70,8 @@ let package = Package(
             name: "SharpyPerception",
             dependencies: ["SharpyEngine", "SharpyRender",
                            .product(name: "WhisperKit", package: "argmax-oss-swift"),
-                           .product(name: "SpeakerKit", package: "argmax-oss-swift")],
+                           .product(name: "SpeakerKit", package: "argmax-oss-swift"),
+                           .product(name: "FluidAudio", package: "FluidAudio")],
             path: "Sources/SharpyPerception",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
