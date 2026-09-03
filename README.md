@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. 76 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. 81 tests green.**
 
 | | |
 |---|---|
@@ -38,6 +38,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Speech | Apple `SpeechAnalyzer`, 61–79× realtime, word-level timings |
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
+| Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
 
 ### Try it
 
