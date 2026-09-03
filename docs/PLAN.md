@@ -599,9 +599,34 @@ Driven end to end on the user's reel: open → report → segments → words →
 +2.32 LU from the −23.0 LUFS target"* → render, which normalised to exactly −23.0 LUFS as
 confirmed by ffmpeg → undo.
 
-Still open in M1: whisper-turbo as the second ASR engine (needs the xcodebuild path), diarization,
-and VLM scene semantics. Still open in M2: the falsifiable brief, resource claims, elicitation
-logging, and MCP Tasks for long operations. Code: `Sources/SharpyEngine`, `Sources/SharpyRender`, `Sources/SharpyCLI`,
+**M1's perception stack is complete.** The second ASR engine and diarization both arrived from
+one place: `argmaxinc/argmax-oss-swift` (MIT) ships WhisperKit and SpeakerKit as CoreML Swift
+packages, so neither needs Python *or* MLX and the whole project still builds under plain
+`swift build`. That removed the xcodebuild constraint this milestone was blocked on.
+
+**The two-engine confidence mechanism is real and validated.** WhisperKit supplies the words (it
+keeps fillers, which Apple normalises away, and returns a per-word probability Apple does not
+expose); Apple votes. The merge had to be rewritten: aligning by *time overlap* is the obvious
+approach and fails badly, because the engines place the same words up to a few hundred
+milliseconds apart, so each word smears across its neighbours and **197 of 263 came back
+"disputed"** — 75 % false disagreement, enough to hold every render.
+
+Aligning by *sequence* — a longest common subsequence over normalised words, windowed by time so
+an hour of speech is not a 9 000 × 9 000 table — brings that to **22 of 263**. Those 22 are
+precisely the sites found earlier by hand-adjudicating this reel against its on-screen cards:
+*"fix"* where Apple heard *"pick"*, *"decibels"* for *"decimals"*, *"checked"* for *"check"*, and
+the single meaning inversion. **The mechanism independently reproduces the manual analysis**,
+which is the strongest evidence available that it works. 16.3 s for 88 s of audio — 5× realtime,
+matching the Python whisper-turbo benchmark exactly.
+
+**Diarization** (SpeakerKit, pyannote via CoreML) correctly reports one speaker on the
+single-person reel rather than hallucinating extras: 21 turns, 78.5 s of speech in 88 s, 3×
+realtime. It also exposes the handover instants, which are the cheapest legitimate cut points in
+a conversation.
+
+Still open in M2: resource claims and MCP Tasks for long operations. Still unbuilt: VLM scene
+semantics (the Swift probe works; wiring it into the index is the remaining M1 nicety), M3's
+render verification and UI, and M4's autonomy instruments beyond the elicitation log. Code: `Sources/SharpyEngine`, `Sources/SharpyRender`, `Sources/SharpyCLI`,
 `Sources/SharpyPerceptionProbe`.
 
 ### M1 — perception index

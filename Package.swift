@@ -65,7 +65,8 @@ let package = Package(
         .target(
             name: "SharpyPerception",
             dependencies: ["SharpyEngine", "SharpyRender",
-                           .product(name: "WhisperKit", package: "argmax-oss-swift")],
+                           .product(name: "WhisperKit", package: "argmax-oss-swift"),
+                           .product(name: "SpeakerKit", package: "argmax-oss-swift")],
             path: "Sources/SharpyPerception",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

@@ -411,6 +411,37 @@ case "look":
         }
     } catch { fail("look: \(error)") }
 
+case "speakers":
+    // sharpy speakers <file> — who talks, and when
+    guard let path = argv.dropFirst().first else { fail("usage: sharpy speakers <file>") }
+    do {
+        let url = URL(fileURLWithPath: path)
+        let store = try IndexStore()
+        let sem = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var index: SpeakerIndex?
+        nonisolated(unsafe) var cached = false
+        nonisolated(unsafe) var failure: Error?
+        let t0 = Date()
+        Task {
+            do { (index, cached) = try await store.speakers(for: url) } catch { failure = error }
+            sem.signal()
+        }
+        sem.wait()
+        if let failure { fail("speakers: \(failure)") }
+        guard let idx = index else { fail("no result") }
+        let dt = Date().timeIntervalSince(t0)
+        let dur = (try? AudioSource(url: url).duration.seconds.doubleValue) ?? 0
+        print(String(format: "%d speaker(s), %d turn(s) in %.1f s (%.0f s audio, %.0f× realtime)%@",
+                     idx.speakerCount, idx.turns.count, dt, dur, dur / max(dt, 0.001), cached ? " (cached)" : ""))
+        for (speaker, time) in idx.shareOfVoice.sorted(by: { $0.value.seconds.doubleValue > $1.value.seconds.doubleValue }) {
+            print(String(format: "  speaker %d: %.1f s (%.0f%% of speech)", speaker, time.seconds.doubleValue,
+                         100 * time.seconds.doubleValue / max(idx.shareOfVoice.values.reduce(0.0) { $0 + $1.seconds.doubleValue }, 0.001)))
+        }
+        let changes = idx.speakerChanges
+        print("  speaker changes: \(changes.count)\(changes.isEmpty ? " — a single-voice piece" : " (free cut points)")")
+        for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
+    } catch { fail("speakers: \(error)") }
+
 case "silence":
     // sharpy silence <file> [--below 25] [--min 0.4]
     guard let path = argv.dropFirst().first else { fail("usage: sharpy silence <file> [--below dB] [--min seconds]") }
@@ -487,6 +518,7 @@ default:
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
+      sharpy speakers <file>
       sharpy silence <file> [--below dB] [--min seconds]
       sharpy loudness <file>
       sharpy colorspaces

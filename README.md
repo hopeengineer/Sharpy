@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts working. 143 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts and diarization working. **M1 perception stack complete.** 150 tests green.**
 
 | | |
 |---|---|
@@ -36,6 +36,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Colour | OpenColorIO 2.5.2, ACES built in. Linear→sRGB matches IEC 61966-2-1 within 2 code values |
 | Loudness | EBU R128 in Swift. Agrees with ffmpeg's `ebur128` within **0.06 LU** |
 | Speech | WhisperKit (verbatim, per-word probability) + Apple `SpeechAnalyzer`, voting per word |
+| Speakers | SpeakerKit (pyannote via CoreML) — who talks, when, and where the handovers are |
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
@@ -91,6 +92,7 @@ sharpy render --asset in.mp4 --out out.mov --tighten-pauses 0.4
 sharpy transcribe in.mp4 --voted                # two engines, per-word agreement
 sharpy transcribe in.mp4 --segments --fillers   # words with stable indices
 sharpy look in.mp4 --fps 1                      # faces, hands, on-screen text
+sharpy speakers in.mp4                          # who talks, when, and the free cut points
 sharpy silence in.mp4                           # dead air, from the signal
 sharpy loudness in.mp4                          # EBU R128 + delivery targets
 sharpy bench --asset 4k.mov --color ACEScg      # the compositor gate
