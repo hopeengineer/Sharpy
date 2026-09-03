@@ -52,3 +52,36 @@ xcodebuild -scheme sharpy-probe -destination 'platform=macOS' -configuration Rel
 ```
 Running an MLX-linked product built by `swift build` fails at runtime with
 "MLX error: Failed to load the default metallib".
+
+## Re-measuring a swapped component (added 2026-09-04)
+
+When a component is replaced, it must be re-measured against the baseline it replaces, on the
+same reference media and the same known truth. Regenerate the ASR reference:
+
+```bash
+say -v Samantha -r 175 -o a1.aiff -f script_a.txt ; say -v Daniel -r 170 -o b1.aiff -f script_b.txt
+say -v Samantha -r 180 -o a2.aiff -f script_a.txt ; say -v Daniel -r 165 -o b2.aiff -f script_b.txt
+ffmpeg -i a1.aiff -i b1.aiff -i a2.aiff -i b2.aiff \
+  -filter_complex "[0:a][1:a][2:a][3:a]concat=n=4:v=0:a=1,aresample=16000" -ac 1 speech16k.wav
+sharpy transcribe speech16k.wav --engine whisper     # then score with wer.py
+```
+
+The diarization set (`script_c.txt` is the third voice):
+
+```bash
+say -v Samantha -r 175 -o v1.aiff -f script_a.txt
+say -v Daniel   -r 170 -o v2.aiff -f script_b.txt
+say -v Karen    -r 172 -o v3.aiff -f script_c.txt
+ffmpeg -i v1.aiff -af aresample=16000 -ac 1 one_voice.wav                       # truth 1
+ffmpeg -i v1.aiff -i v2.aiff -i v1.aiff -i v2.aiff -filter_complex \
+  "[0:a][1:a][2:a][3:a]concat=n=4:v=0:a=1,aresample=16000" -ac 1 two_voices.wav  # truth 2
+ffmpeg -i v1.aiff -i v2.aiff -i v3.aiff -i v1.aiff -i v2.aiff -i v3.aiff -filter_complex \
+  "[0:a][1:a][2:a][3:a][4:a][5:a]concat=n=6:v=0:a=1,aresample=16000" -ac 1 three_voices.wav
+sharpy speakers two_voices.wav        # automatic — currently over-counts by one
+```
+
+Results and the verdict on each swap: `results/swift_asr_diarization.txt`.
+
+**Caveat that matters:** these multi-speaker files are hard concatenations of separately recorded
+voices, so their turn boundaries are harsher than real conversation. A diarization rule tuned to
+pass them may be fitting the fixture. A real multi-speaker recording is what would settle it.

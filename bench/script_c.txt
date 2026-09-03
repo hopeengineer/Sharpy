@@ -1,0 +1,1 @@
+Right, so the third thing nobody mentions is delivery. [[slnc 700]] You can cut a perfect piece and still ship it two decibels hot. [[slnc 900]] Um, the loudness target is not a preference, it is a number the platform applies whether you meant it or not. [[slnc 1100]] So measure it, apply the gain, and check the true peak before you call it done. [[slnc 800]]

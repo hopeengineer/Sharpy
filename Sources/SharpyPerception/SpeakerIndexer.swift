@@ -5,8 +5,27 @@
 // so a cut on a speaker change is free". Without it every word belongs to nobody and every
 // multi-speaker edit is guesswork.
 //
-// SpeakerKit runs pyannote through CoreML, so this is on-device and needs no Python. Speaker
-// labels are per-recording: "speaker 0" in one file has nothing to do with "speaker 0" in
+// SpeakerKit runs pyannote through CoreML, so this is on-device and needs no Python.
+//
+// MEASURED LIMITATION — automatic speaker counting is not validated. Against known truth:
+//
+//     one voice     -> 1  correct        the user's real reel -> 1  correct
+//     two voices    -> 3  WRONG (+1)     three voices        -> 4  WRONG (+1)
+//
+// It over-counts by exactly one whenever more than one person speaks, and the spurious cluster is
+// consistently tiny — 4 % / 7.0 s and 3 % / 6.8 s. That size and consistency point at windows
+// straddling the boundaries of the test files, which are hard concatenations of separate
+// recordings; real conversational audio may not behave the same way. So no "drop small clusters"
+// correction is applied here: with two synthetic multi-speaker files it would be fitting a rule to
+// the fixture rather than to diarization. Settling it needs a real multi-speaker recording.
+//
+// `numberOfSpeakers` is honoured exactly when supplied — forcing 2 on the two-voice file gives 2
+// with a 66/34 split against an expected 62/38 — so pass it when the count is known.
+//
+// For reference, the measured alternative: sherpa-onnx pyannote-3.0 + eres2net found 2 of 2 on the
+// same audio at 13.8x realtime. SpeakerKit runs at ~280x. Speed is not the deciding axis here.
+//
+// Speaker labels are per-recording: "speaker 0" in one file has nothing to do with "speaker 0" in
 // another. SpeakerKit exposes per-speaker centroid embeddings for linking identities across
 // files, which is what an enrolment registry would eventually use; that is deliberately not done
 // here, because "the same voice" across recordings needs a calibrated threshold and guessing one
@@ -60,9 +79,24 @@ public struct SpeakerIndexer {
     /// Turns shorter than this are dropped: pyannote emits slivers around overlaps, and a 100 ms
     /// "turn" is a crossfade artefact rather than somebody speaking.
     public let minimumTurn: TimeValue
+    /// Agglomerative clustering cut-off. Lower splits one voice into several; higher merges two
+    /// people into one. Calibrated against known truth rather than taken from the default — see
+    /// `bench/results/diarization_sweep.txt`.
+    public let clusterDistanceThreshold: Float?
+    /// Smallest number of embedding windows that may form a speaker. This is the parameter that
+    /// suppresses a spurious extra voice assembled from a handful of scattered windows.
+    public let minClusterSize: Int?
+    /// When the count is known ahead of time, saying so beats any threshold.
+    public let numberOfSpeakers: Int?
 
-    public init(minimumTurn: TimeValue = TimeValue(seconds: Rational(3, 10))) {
+    public init(minimumTurn: TimeValue = TimeValue(seconds: Rational(3, 10)),
+                clusterDistanceThreshold: Float? = nil,
+                minClusterSize: Int? = nil,
+                numberOfSpeakers: Int? = nil) {
         self.minimumTurn = minimumTurn
+        self.clusterDistanceThreshold = clusterDistanceThreshold
+        self.minClusterSize = minClusterSize
+        self.numberOfSpeakers = numberOfSpeakers
     }
 
     public func index(url: URL, asset: NodeID) async throws -> SpeakerIndex {
@@ -75,7 +109,10 @@ public struct SpeakerIndexer {
         do { kit = try await SpeakerKit() }
         catch { throw SpeakerIndexError.modelUnavailable(String(describing: error)) }
 
-        let result = try await kit.diarize(audioArray: samples, options: nil, progressCallback: nil)
+        let options = PyannoteDiarizationOptions(numberOfSpeakers: numberOfSpeakers,
+                                                 clusterDistanceThreshold: clusterDistanceThreshold,
+                                                 minClusterSize: minClusterSize)
+        let result = try await kit.diarize(audioArray: samples, options: options, progressCallback: nil)
 
         let turns = result.segments.compactMap { segment -> SpeakerTurn? in
             let start = TimeValue(seconds: Rational(Int64(segment.startTime * 1000), 1000))

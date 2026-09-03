@@ -1,0 +1,49 @@
+SWIFT-NATIVE ASR AND DIARIZATION — measured against the SAME reference media and the SAME known
+truth used to pick the original MLX/sherpa-onnx stack. Mac mini M4 16 GB, 2026-09-04.
+
+Reference: 202.8 s TTS speech, two voices (A B A B), 528 reference words, 12 spoken fillers.
+Regenerated from bench/script_a.txt and script_b.txt — byte-identical procedure to the original.
+
+--- ASR ---------------------------------------------------------------------------------------
+                                        WER      fillers   speed
+  whisper-large-v3-turbo (MLX)  BASELINE  1.52 %   12/12     5.0x
+  WhisperKit large-v3-v20240930           0.76 %   10/12*    10.0x      <- adopted
+
+  * The two "lost" fillers are both `uh` transcribed as `ah`. `ah` is in Word.fillerWords, so
+    isFiller() detects 12/12 — no functional regression for disfluency editing. Strict um/uh
+    counting (the original benchmark's method) gives 10/12.
+
+  VERDICT: WhisperKit is twice as accurate on words and twice as fast. The swap is justified.
+
+--- DIARIZATION --------------------------------------------------------------------------------
+                                        result vs truth                    speed
+  sherpa-onnx pyannote3.0+eres2net  BASELINE  2 of 2 correct                13.8x
+  SpeakerKit (pyannote via CoreML)            over-counts by one            ~280x   <- NOT VALIDATED
+
+  Automatic count against four files of known truth:
+      one_voice.wav        truth 1  ->  1   ok
+      two_voices.wav       truth 2  ->  3   WRONG
+      three_voices.wav     truth 3  ->  4   WRONG
+      reel-12-NOSFX.mp4    truth 1  ->  1   ok
+
+  Systematic +1 whenever more than one person speaks. The spurious cluster is consistently tiny:
+      two voices:    61 % / 35 % / 4 %  (7.0 s)   expected 62 / 38
+      three voices:  51 % / 33 % / 13 % / 3 %  (6.8 s)
+
+  That size and consistency point at embedding windows straddling the boundaries of these test
+  files, which are hard concatenations of separately recorded voices. Real conversational audio
+  may not behave the same way, so NO "drop clusters under 5 %" correction is applied — with two
+  synthetic multi-speaker files that would fit a rule to the fixture, not to diarization.
+
+  numberOfSpeakers IS honoured exactly: forcing 2 gives 2, with a 66/34 split against an
+  expected 62/38. Pass it when the count is known.
+
+  OPEN: settling this needs a real multi-speaker recording. Until then automatic speaker counting
+  is documented as unvalidated, and the earlier claim that diarization was validated was wrong —
+  it had only been run on a single-speaker file, the one case that cannot expose this bias.
+
+--- Reproduce ----------------------------------------------------------------------------------
+  say -v Samantha -r 175 -o v1.aiff -f script_a.txt   # etc, see bench/README.md
+  sharpy transcribe speech16k.wav --engine whisper
+  sharpy speakers two_voices.wav            # automatic
+  sharpy speakers two_voices.wav --speakers 2

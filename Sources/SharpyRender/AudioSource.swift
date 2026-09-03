@@ -16,10 +16,12 @@ public struct AudioFormatInfo: Sendable, Equatable, CustomStringConvertible {
 
 public enum AudioSourceError: Error, CustomStringConvertible {
     case noAudioTrack(URL)
+    case fileNotFound(URL)
     case readerFailed(String)
     case formatUnavailable(URL)
     public var description: String {
         switch self {
+        case .fileNotFound(let u): return "no file at \(u.path)"
         case .noAudioTrack(let u): return "no audio track in \(u.lastPathComponent)"
         case .readerFailed(let s): return "audio AVAssetReader: \(s)"
         case .formatUnavailable(let u): return "cannot read audio format of \(u.lastPathComponent)"
@@ -49,6 +51,9 @@ public final class AudioSource: @unchecked Sendable {
 
     public init(url: URL, sampleRate: Int = 48_000, channels: Int = 2) throws {
         self.url = url
+        // Distinguish "the file is not there" from "the file has no sound". Conflating them sends
+        // the caller hunting for a codec problem that does not exist.
+        guard FileManager.default.fileExists(atPath: url.path) else { throw AudioSourceError.fileNotFound(url) }
         asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         guard let t = asset.tracks(withMediaType: .audio).first else { throw AudioSourceError.noAudioTrack(url) }
         track = t

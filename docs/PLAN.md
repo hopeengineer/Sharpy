@@ -599,7 +599,7 @@ Driven end to end on the user's reel: open → report → segments → words →
 +2.32 LU from the −23.0 LUFS target"* → render, which normalised to exactly −23.0 LUFS as
 confirmed by ffmpeg → undo.
 
-**M1's perception stack is complete.** The second ASR engine and diarization both arrived from
+**M1's perception stack is feature-complete; one layer is measured-and-wanting.** The second ASR engine and diarization both arrived from
 one place: `argmaxinc/argmax-oss-swift` (MIT) ships WhisperKit and SpeakerKit as CoreML Swift
 packages, so neither needs Python *or* MLX and the whole project still builds under plain
 `swift build`. That removed the xcodebuild constraint this milestone was blocked on.
@@ -619,10 +619,33 @@ the single meaning inversion. **The mechanism independently reproduces the manua
 which is the strongest evidence available that it works. 16.3 s for 88 s of audio — 5× realtime,
 matching the Python whisper-turbo benchmark exactly.
 
-**Diarization** (SpeakerKit, pyannote via CoreML) correctly reports one speaker on the
-single-person reel rather than hallucinating extras: 21 turns, 78.5 s of speech in 88 s, 3×
-realtime. It also exposes the handover instants, which are the cheapest legitimate cut points in
-a conversation.
+**ASR was re-measured against the baseline it replaced**, on the same regenerated reference audio
+and the same known truth. WhisperKit: **0.76 % WER against MLX whisper-turbo's 1.52 %**, at 10×
+realtime versus 5×. Its two "lost" fillers are `uh` transcribed as `ah`, and `ah` is in
+`Word.fillerWords`, so `isFiller` detects 12/12 — no functional regression. **The swap is
+justified on measurement**, which is how it should have been justified in the first place rather
+than on "MIT and builds under `swift build`".
+
+**Diarization's automatic speaker counting is NOT validated, and the earlier claim that it was is
+withdrawn.** It had only been run against a single-speaker file — the one case that cannot expose
+the failure. Against four files of known truth:
+
+| file | truth | SpeakerKit found |
+|---|---|---|
+| one voice | 1 | 1 ✓ |
+| two voices | 2 | **3** ✗ |
+| three voices | 3 | **4** ✗ |
+| the user's reel | 1 | 1 ✓ |
+
+A systematic **+1 whenever more than one person speaks**. The spurious cluster is consistently
+tiny — 4 % / 7.0 s and 3 % / 6.8 s — which points at embedding windows straddling the boundaries
+of these test files, hard concatenations of separately recorded voices. Real conversational audio
+may not behave the same way, so **no correction is applied**: with two synthetic multi-speaker
+files, a "drop clusters under 5 %" rule fits the fixture rather than diarization.
+`numberOfSpeakers` is honoured exactly (forcing 2 gives 2, split 66/34 against an expected 62/38),
+so it is exposed and should be passed when the count is known. The measured baseline, sherpa-onnx
+pyannote-3.0 + eres2net, got 2 of 2 on the same audio at 13.8× realtime; SpeakerKit runs at ~280×,
+so speed is not the deciding axis. **Settling this needs a real multi-speaker recording.**
 
 Still open in M2: resource claims and MCP Tasks for long operations. Still unbuilt: VLM scene
 semantics (the Swift probe works; wiring it into the index is the remaining M1 nicety), M3's

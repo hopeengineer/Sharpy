@@ -273,9 +273,16 @@ case "transcribe":
             if #available(macOS 26.0, *) {
                 let t0 = Date()
                 let store = try IndexStore()
-                let voted = argv.contains("--voted")
-                let t = voted ? try await store.votedTranscript(for: url).0
-                              : try await SpeechIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
+                let engine = option("--engine") ?? (argv.contains("--voted") ? "voted" : "apple")
+                let voted = engine == "voted"
+                let t: Transcript
+                switch engine {
+                case "voted":   t = try await store.votedTranscript(for: url).0
+                case "whisper": t = try await WhisperIndexer(model: option("--model") ?? "large-v3-v20240930")
+                                             .transcribe(url: url, asset: NodeID(contentOf: path))
+                case "apple":   t = try await SpeechIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
+                default: fail("unknown --engine \(engine); use apple, whisper or voted")
+                }
                 let dt = Date().timeIntervalSince(t0)
                 let dur = try AudioSource(url: url).duration.seconds.doubleValue
                 print(String(format: "%d words in %.1f s  (%.0f s audio, %.0f× realtime)  engines: %@",
@@ -423,7 +430,17 @@ case "speakers":
         nonisolated(unsafe) var failure: Error?
         let t0 = Date()
         Task {
-            do { (index, cached) = try await store.speakers(for: url) } catch { failure = error }
+            do {
+                let indexer = SpeakerIndexer(clusterDistanceThreshold: option("--cluster-threshold").flatMap { Float($0) },
+                                             minClusterSize: option("--min-cluster").flatMap { Int($0) },
+                                             numberOfSpeakers: option("--speakers").flatMap { Int($0) })
+                // A sweep must not read a cached answer computed with different settings.
+                if option("--cluster-threshold") != nil || option("--min-cluster") != nil || option("--speakers") != nil {
+                    index = try await indexer.index(url: url, asset: NodeID(contentOf: path)); cached = false
+                } else {
+                    (index, cached) = try await store.speakers(for: url, indexer: indexer)
+                }
+            } catch { failure = error }
             sem.signal()
         }
         sem.wait()
@@ -514,11 +531,12 @@ default:
                     [--cut a-b]... [--loudness broadcast|streaming|<LUFS>]
                     [--remove-fillers] [--remove-words 1,5,10-12] [--tighten-pauses <seconds>]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--frames N] [--color <space>] [--display <space>]
-      sharpy transcribe <file> [--voted] [--segments] [--fillers] [--pauses <seconds>]
+      sharpy transcribe <file> [--engine apple|whisper|voted] [--model <name>]
+                              [--segments] [--fillers] [--pauses <seconds>]
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
-      sharpy speakers <file>
+      sharpy speakers <file> [--cluster-threshold F] [--min-cluster N] [--speakers N]
       sharpy silence <file> [--below dB] [--min seconds]
       sharpy loudness <file>
       sharpy colorspaces

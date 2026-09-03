@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts and diarization working. **M1 perception stack complete.** 150 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts working; diarization landed but its automatic speaker counting is **not validated**. 150 tests green.**
 
 | | |
 |---|---|
@@ -36,7 +36,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Colour | OpenColorIO 2.5.2, ACES built in. Linear→sRGB matches IEC 61966-2-1 within 2 code values |
 | Loudness | EBU R128 in Swift. Agrees with ffmpeg's `ebur128` within **0.06 LU** |
 | Speech | WhisperKit (verbatim, per-word probability) + Apple `SpeechAnalyzer`, voting per word |
-| Speakers | SpeakerKit (pyannote via CoreML) — who talks, when, and where the handovers are |
+| Speakers | SpeakerKit (pyannote via CoreML). Correct when told the count; **automatic counting over-counts by one** — see below |
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
@@ -225,6 +225,10 @@ with no UI process in existence*, and it is met.
 - **Dead air is measured from the waveform.** Apple's word timings are contiguous — on 88 s of
   narration every "gap" was exactly 0.06 or 0.12 s, the analyzer's quantisation. The same audio
   has 4 real silences totalling 0.90 s.
+- **ASR was swapped only after re-measuring against the baseline it replaced.** WhisperKit scores
+  **0.76 % WER against MLX whisper-turbo's 1.52 %** on the same reference audio, at 10× realtime
+  versus 5×. Its two "lost" fillers are `uh` transcribed as `ah`, which `isFiller` still detects,
+  so disfluency editing is unaffected: 12/12 functionally.
 - **Two ASR engines vote per word**, and alignment is by *sequence*, not by time. Time overlap is
   the obvious approach and it fails badly: the two engines place the same words up to a few hundred
   milliseconds apart, so words smear across their neighbours and **197 of 263 came back "disputed"**
@@ -240,6 +244,31 @@ with no UI process in existence*, and it is met.
   answer*, and every downstream check validates against the misreading. Give the brief a register
   and stakes and "made a serious video funny" becomes an assertion violation with a timecode.
   A brief that compiles to nothing warns that it cannot catch a misreading.
+
+### A measured limitation, stated plainly
+
+Diarization's **automatic speaker counting is not validated.** Against known truth:
+
+| file | truth | found |
+|---|---|---|
+| one voice | 1 | 1 ✓ |
+| two voices | 2 | **3** ✗ |
+| three voices | 3 | **4** ✗ |
+| a real single-speaker reel | 1 | 1 ✓ |
+
+It over-counts by exactly one whenever more than one person speaks. The spurious cluster is
+consistently tiny — 4 % / 7.0 s and 3 % / 6.8 s — which points at embedding windows straddling the
+boundaries of the test files, hard concatenations of separately recorded voices. Real
+conversational audio may behave differently, so **no "drop small clusters" correction is applied**:
+with two synthetic multi-speaker files that would be fitting a rule to the fixture rather than to
+diarization. `numberOfSpeakers` is honoured exactly, so pass it when the count is known.
+
+The measured alternative, [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) pyannote-3.0 +
+eres2net, got 2 of 2 on the same audio. Settling this needs a real multi-speaker recording.
+
+This section exists because the first version of this README claimed diarization was validated on
+the strength of a run against a *single-speaker* file — the one case that cannot expose the bias.
+The full comparison is in [`bench/results/swift_asr_diarization.txt`](bench/results/swift_asr_diarization.txt).
 
 ## Requirements
 
