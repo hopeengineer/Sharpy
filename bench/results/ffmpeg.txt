@@ -1,0 +1,23 @@
+== DECODE (900 frames 4K@30 / 300 frames 1080p) ==
+4K H.264  HW decode (videotoolbox)             rtime= 10.28s  fps=   87.5  peakRSS=  380MB
+4K HEVC   HW decode (videotoolbox)             rtime=  7.79s  fps=  115.5  peakRSS=  570MB
+4K ProRes HW decode (videotoolbox)             rtime=  5.71s  fps=  157.6  peakRSS=  770MB
+4K H.264  SW decode (libavcodec)               rtime=  4.82s  fps=  186.7  peakRSS=  352MB
+4K ProRes SW decode (libavcodec)               rtime=  9.08s  fps=   99.1  peakRSS=  616MB
+1080p H.264 HW decode                          rtime=  4.37s  fps=  205.9  peakRSS=  133MB
+== MULTI-STREAM (4x 4K H.264 HW decode concurrently = 3600 frames) ==
+4x 4K H.264 HW decode, aggregate               rtime= 11.11s  fps=  324.0  peakRSS= 1359MB
+4x 4K ProRes HW decode, aggregate              rtime= 10.52s  fps=  342.2  peakRSS= 2345MB
+== ENCODE (900 frames 4K) ==
+4K -> H.264 HW encode 40Mbps                   rtime= 15.17s  fps=   59.3  peakRSS=  678MB
+4K -> HEVC  HW encode 30Mbps                   rtime= 15.59s  fps=   57.7  peakRSS=  677MB
+4K -> ProRes422HQ HW encode                    rtime=  5.08s  fps=  177.2  peakRSS=  833MB
+1080p -> H.264 HW encode 12Mbps                rtime=  4.11s  fps=  219.0  peakRSS=  220MB
+== ANALYSIS FILTERS ==
+ebur128 loudness, 203s audio                   rtime=  0.08s  fps=   12.5  peakRSS=   21MB
+signalstats (QCTools core), 1080p              rtime=  4.37s  fps=  205.9  peakRSS=  149MB
+signalstats (QCTools core), 4K                 rtime= 16.84s  fps=   53.4  peakRSS=  458MB
+scene-change select, 1080p                     rtime=  1.19s  fps=  756.3  peakRSS=  145MB
+cropdetect, 4K                                 rtime=  4.91s  fps=  183.3  peakRSS=  367MB
+silencedetect+astats, 203s audio               rtime=  0.09s  fps=   11.1  peakRSS=   20MB
+FFMPEG_DONE

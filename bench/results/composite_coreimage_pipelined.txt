@@ -1,0 +1,16 @@
+COMPOSITE-PIPELINED 4K H.264 fmt=native (?) layers=1 frames=0 wall=0.1s fps=0.0 peakRSS=26MB
+COMPOSITE-PIPELINED 4K H.264 fmt=native (?) layers=2 frames=0 wall=0.1s fps=0.0 peakRSS=32MB
+COMPOSITE-PIPELINED 4K H.264 fmt=native (?) layers=4 frames=0 wall=0.3s fps=0.0 peakRSS=53MB
+COMPOSITE-PIPELINED 4K H.264 fmt=native (?) layers=6 frames=0 wall=0.4s fps=0.0 peakRSS=53MB
+COMPOSITE-PIPELINED 4K ProRes fmt=native (?) layers=1 frames=0 wall=1.9s fps=0.0 peakRSS=53MB
+COMPOSITE-PIPELINED 4K ProRes fmt=native (?) layers=2 frames=0 wall=2.7s fps=0.0 peakRSS=82MB
+COMPOSITE-PIPELINED 4K ProRes fmt=native (?) layers=4 frames=0 wall=5.4s fps=0.0 peakRSS=127MB
+COMPOSITE-PIPELINED 4K ProRes fmt=native (?) layers=6 frames=0 wall=8.2s fps=0.0 peakRSS=127MB
+COMPOSITE-PIPELINED 4K H.264 fmt=nv12 (420v) layers=1 frames=900 wall=2.3s fps=387.0 peakRSS=45MB
+COMPOSITE-PIPELINED 4K H.264 fmt=nv12 (420v) layers=2 frames=900 wall=7.3s fps=123.1 peakRSS=61MB
+COMPOSITE-PIPELINED 4K H.264 fmt=nv12 (420v) layers=4 frames=361 wall=40.5s fps=8.9 peakRSS=61MB
+COMPOSITE-PIPELINED 4K H.264 fmt=nv12 (420v) layers=6 frames=150 wall=40.1s fps=3.7 peakRSS=61MB
+COMPOSITE-PIPELINED 4K ProRes fmt=nv12 (420v) layers=1 frames=900 wall=12.0s fps=75.1 peakRSS=209MB
+COMPOSITE-PIPELINED 4K ProRes fmt=nv12 (420v) layers=2 frames=224 wall=17.3s fps=12.9 peakRSS=239MB
+COMPOSITE-PIPELINED 4K ProRes fmt=nv12 (420v) layers=4 frames=136 wall=40.5s fps=3.4 peakRSS=239MB
+COMPOSITE-PIPELINED 4K ProRes fmt=nv12 (420v) layers=6 frames=43 wall=43.4s fps=1.0 peakRSS=239MB

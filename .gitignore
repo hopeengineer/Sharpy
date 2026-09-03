@@ -1,0 +1,12 @@
+.build/
+.swiftpm/
+*.xcodeproj
+xcuserdata/
+DerivedData/
+.DS_Store
+bench/media/
+bench/frames/
+bench/real/frames_*/
+bench/.venv/
+bench/models/
+*.log

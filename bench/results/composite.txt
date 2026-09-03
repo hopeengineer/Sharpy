@@ -1,0 +1,6 @@
+COMPOSITE 4K H.264 layers=1 frames=300 wall=1.0s fps=300.9 peakRSS=42MB  (HW decode -> CoreImage/Metal composite -> 4K texture, sync per frame)
+COMPOSITE 4K H.264 layers=2 frames=300 wall=3.1s fps=98.1 peakRSS=43MB  (HW decode -> CoreImage/Metal composite -> 4K texture, sync per frame)
+COMPOSITE 4K H.264 layers=4 frames=300 wall=20.4s fps=14.7 peakRSS=64MB  (HW decode -> CoreImage/Metal composite -> 4K texture, sync per frame)
+COMPOSITE 4K ProRes layers=1 frames=300 wall=3.2s fps=93.5 peakRSS=348MB  (HW decode -> CoreImage/Metal composite -> 4K texture, sync per frame)
+COMPOSITE 4K ProRes layers=2 frames=300 wall=3.3s fps=91.5 peakRSS=555MB  (HW decode -> CoreImage/Metal composite -> 4K texture, sync per frame)
+COMPOSITE 4K ProRes layers=4 frames=300 wall=10.5s fps=28.6 peakRSS=555MB  (HW decode -> CoreImage/Metal composite -> 4K texture, sync per frame)

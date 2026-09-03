@@ -1,0 +1,10 @@
+installing speech assets...
+installed in 0.11180901527404785s
+APPLE SpeechAnalyzer: wall=2.4s audio=203s RTFx=85.1 words=521 timed_runs=521 fillers(um/uh)=8 peakRSS=20MB
+   sample: Okay, so, um, today I want to talk about why most video editing tools feel mechanical. The problem is that they cut on a signal, not on meaning. Ah, let me give
+   words: (Okay,, 0.00-0.54) (so,, 0.54-0.84) (um,, 0.84-1.50) (today, 1.50-1.80) (I, 1.80-2.10) (want, 2.10-2.28) (to, 2.28-2.46) (talk, 2.46-2.58)
+installing speech assets...
+installed in 0.0055969953536987305s
+APPLE SpeechAnalyzer: wall=2.2s audio=203s RTFx=93.9 words=521 timed_runs=521 fillers(um/uh)=8 peakRSS=20MB
+   sample: Okay, so, um, today I want to talk about why most video editing tools feel mechanical. The problem is that they cut on a signal, not on meaning. Ah, let me give
+   words: (Okay,, 0.00-0.54) (so,, 0.54-0.84) (um,, 0.84-1.50) (today, 1.50-1.80) (I, 1.80-2.10) (want, 2.10-2.28) (to, 2.28-2.46) (talk, 2.46-2.58)

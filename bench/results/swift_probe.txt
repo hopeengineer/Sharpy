@@ -1,0 +1,28 @@
+SWIFT PERCEPTION PROBE — mlx-swift-lm pinned at 5694a2f6 (main, 2026-09-01), built with xcodebuild
+(Metal Toolchain 17E188), Mac mini M4 16 GB. Same 22 labelled frames, prompt and scoring as
+bench/bench_vlm_quality.py. Measured 2026-09-03.
+
+text-only sanity (Qwen3-VL-2B): reply = {"ok": true}
+
+SWIFT-PROBE gemma-4-E2B-it-4bit: frames=22 parsed_json=22/22 wall=54 s (2.4s/frame) peakMLX=4.05 GB
+   person_visible acc 22/22
+   face_count acc     22/22
+   hands_visible acc  20/21
+   layout acc         19/22
+   text recall        85/90 lines   extra lines 17/95 reported
+   prefill 350 tok/s   gen 61 tok/s   (9570 prompt tokens total)
+   Python (mlx-vlm 0.6.17) for comparison: 22/22, 22/22, 21/22, 19/22, 86/90, 18/98, 2.3 s/frame, 4.17 GB
+
+SWIFT-PROBE Qwen3-VL-2B-Instruct-4bit: frames=22 parsed_json=17/22 wall=61 s (2.8s/frame) peakMLX=2.64 GB
+   person_visible acc 17/22
+   face_count acc     17/22
+   hands_visible acc  15/17
+   layout acc         15/22
+   text recall        70/70 lines   extra lines 10/83 reported
+   prefill 496 tok/s   gen 78 tok/s   (16236 prompt tokens total)
+   Python for comparison: 17/22, 17/22, 15/22, 15/22, 67/70, 6/73, 2.8 s/frame, 2.69 GB
+
+Under the 3.31.4 release tag: Gemma 4 failed to load (layer 15 v_proj missing — shared-KV
+layers unhandled) and Qwen3-VL-2B generated degenerate "```json json json…" on every frame at
+matching throughput (414/78 tok/s). Both fixed on main. Build: `swift build` cannot compile
+MLX's Metal shaders; use xcodebuild -skipPackagePluginValidation -skipMacroValidation.

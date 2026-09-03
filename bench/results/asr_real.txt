@@ -1,0 +1,19 @@
+REAL-ASR apple: wall=1.4s audio=88s words=264
+REAL-ASR whisper-turbo: wall=10.2s words=264 peakRSS=1839MB
+REAL-ASR distil-whisper: wall=11.7s words=265 peakRSS=3146MB
+REAL-ASR parakeet: wall=3.1s words=263
+PAIRWISE word-disagreement (row as reference):
+                     apple  whisper-turbo distil-whisper       parakeet
+       apple          0.0%           8.3%           9.1%           9.1%
+whisper-turbo          8.3%           0.0%           4.2%           4.9%
+distil-whisper          9.1%           4.2%           0.0%           4.9%
+    parakeet          9.1%           4.9%           4.9%           0.0%
+--- apple ---
+This morning, my AI made my audio 3 times better, showed me numbers and everything. By lunch, it was in trash. That crap was worse than my phone. If you have ever asked an AI to pick something and it came back worse, that's on you. Agent did make it worse, the target I gave it in. I told you to get my voice, close studio voice, and they did exactly that. But closer is a number. I checked it myself. Numbers real. My voice did land 3 times closer to studio voice, than what I recorded on my phone, and it's still useless to me, because numbers can hear loud. It can't hear good agent kept going. St
+--- whisper-turbo ---
+ This morning, my AI made my audio three times better. Showed me numbers and everything. By lunch, it was in trash. That crap was worse than my phone. If you have ever asked an AI to fix something and it came back worse, that's on you. Agent did make it worse. The target I gave it did. I told you to get my voice closer to studio voice. And it did exactly that. But closer is a number. I checked it myself. Numbers real. My voice did land three times closer to studio voice than what I recorded on my phone. And it's still useless to me. Because numbers can hear loud, it can't hear good. Agent kept
+--- distil-whisper ---
+ This morning, my AI made my audio three times better. Showed me numbers and everything. By lunch, it was in trash. That crap was worse than my phone. If you have ever asked an AI to fix something and it came back worse, that's on you. Agent will make it worse. The target I gave it did. I told you to get my voice close to studio voice and it did exactly that. But closer is a number. I checked it myself. Numbers real. My voice did land three times closer to studio voice. than what I recorded on my phone. And it's still useless to me, because numbers can hear loud, it can't hear good. Agent kept
+--- parakeet ---
+This morning my AI made my audio three times better. Showed me numbers and everything. By lunch, it was in trash. That crap was worse than my phone. If you have ever asked an AI to fix something and it came back worse, that's on you. Agent didn't make it worse. The target I gave it did. I told it to get my voice close to studio voice and it did exactly that. But closer is a number. I checked it myself. Numbers real. My voice did land three times closer to studio voice than what I recorded on my phone. And it's still useless to me because numbers can hear loud, it can't hear good. Agent kept go
+REAL_ASR_DONE

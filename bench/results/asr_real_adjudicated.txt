@@ -1,0 +1,25 @@
+REAL-SPEECH ASR ADJUDICATION — reel-12 narration, 88 s, phone mic, room. 264 words.
+No reference transcript exists and the analyst cannot listen; every disagreement site between
+engines was adjudicated against (a) the on-screen cards, which restate the narration, and
+(b) sentence context. "?" = could not adjudicate.
+
+site (parakeet reading in brackets)                 | right                | wrong
+asked an AI to [fix] something (card: "fix")         | parakeet whisper distil | apple "pick"
+agent [didn't] make it worse; the target I gave it did | parakeet            | whisper "did", apple "did", distil "will"   ← meaning-inverting
+the target I gave it [did]                           | all but apple        | apple "in"
+I told [it] to get my voice                          | parakeet (context)   | whisper/distil/apple "you"   (minor)
+get my voice [close] to studio voice                 | ?                    | ?  (whisper "closer")
+and [it] did exactly that                            | all but apple        | apple "they"
+a real engineer moves [with] three (card: +3 stop)   | whisper "moves it"   | parakeet "with", apple "you"
+that tool is the [tale] of every single word (card: "took the tail off") | apple "tail" | parakeet "tale", whisper/distil "tale"
+[I did] fake sparkle, squashed (card: "fake sparkle") | whisper "added"     | parakeet "I did", distil "and it fakes", apple "at a"
+[squashed] a lot of it (card: "squashed flat")       | parakeet whisper     | distil "scoshed", apple "scotched"
+already sounds [fake] / apple "big"                  | ?                    | ?
+so the [fixation smart model] / others "fix isn't smarter model" (next line: "definitely not a longer prompt") | whisper distil apple | parakeet
+cost nothing and [your] back deciding (card: "you're") | whisper "you're"   | parakeet "your", apple "your"/"cause"
+[cost] nothing (card: "Costs nothing")               | all but apple        | apple "cause"
+
+adjudicated errors: apple ≈9 (1 meaning-inverting) · distil ≈4 (1 meaning-inverting) ·
+whisper-turbo ≈3 (1 meaning-inverting) · parakeet ≈5 (0 meaning-inverting)
+Every adjudicated error lies in a word where whisper-turbo and parakeet DISAGREE. In every site
+where they agree, both were judged right. → run both; agreement = per-word confidence.

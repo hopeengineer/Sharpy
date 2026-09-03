@@ -1,0 +1,15 @@
+VLM mlx-community/gemma-4-E2B-it-4bit: load=6.8s modelMem=3.55GB
+   frames=1: wall=5.6s prompt_tokens=325 prefill_tps=126.1 gen_tokens=120 gen_tps=48.2 peak=4.1GB peakMLX=4.10GB
+      out: Based on the image provided, here is the analysis:  **Frame Analysis:**  *   **What is on screen:** A vertical, brightly colored bar divided into several vertical stripes of color (red, green, yellow, blue, magenta, cyan
+   frames=4: wall=6.4s prompt_tokens=1123 prefill_tps=295.2 gen_tokens=120 gen_tps=46.3 peak=5.01GB peakMLX=5.01GB
+      out: **Frame 1:** *   **What is on screen:** A vertical color bar divided into segments of red, green, yellow, blue, magenta, and cyan. There are various lines and shapes crossing these segments. *   **Person visible:** No. *
+   frames=8: wall=7.9s prompt_tokens=2187 prefill_tps=409.0 gen_tokens=120 gen_tps=49.3 peak=6.41GB peakMLX=6.41GB
+      out: **Frame 1:** *   **What is on screen:** A vertical color bar divided into segments of red, green, yellow, blue, magenta, and cyan. There are various lines, dots, and rectangular shapes overlaid on the bar. *   **Person v
+VLM mlx-community/gemma-4-E4B-it-4bit: load=8.6s modelMem=5.15GB
+   frames=1: wall=6.8s prompt_tokens=325 prefill_tps=145.1 gen_tokens=120 gen_tps=26.8 peak=5.71GB peakMLX=5.71GB
+      out: **Frame Analysis:**  *   **On Screen:** A vertical rainbow spectrum of colors (red, green, yellow, blue, magenta, cyan) is displayed. There are some graphical overlays, including a faint diagonal line crossing the spectr
+   frames=4: wall=9.9s prompt_tokens=1123 prefill_tps=210.0 gen_tokens=120 gen_tps=26.6 peak=6.84GB peakMLX=6.84GB
+      out: Based on the images provided, here is the analysis for each frame:  **Frame 1 Analysis:** *   **On Screen:** A vibrant, multi-colored background consisting of vertical stripes (Red, Green, Yellow, Blue, Magenta, Cyan). S
+   frames=8: wall=9.2s prompt_tokens=2187 prefill_tps=271.1 gen_tokens=27 gen_tps=27.0 peak=7.83GB peakMLX=7.83GB
+      out: Please provide the frames you would like me to analyze. I need the images to perform the video editor's perception module task.
+VLM_DONE

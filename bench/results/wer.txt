@@ -1,0 +1,5 @@
+WER Apple SpeechAnalyzer: 5.30%  (ref words=528)
+WER whisper-large-v3-turbo: 1.52%
+WER distil-whisper-large-v3: 2.84%
+WER parakeet-tdt-0.6b-v3: 0.57%
+WER_DONE

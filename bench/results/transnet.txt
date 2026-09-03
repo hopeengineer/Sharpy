@@ -1,0 +1,4 @@
+torch 2.14.0 device=mps
+transnetv2_pytorch exports: TransNetV2, transnetv2_pytorch
+TransNetV2 1080p: frames=900 infer_wall=3.8s fps=234.8 device=mps peakRSS=594MB
+TRANSNET_DONE

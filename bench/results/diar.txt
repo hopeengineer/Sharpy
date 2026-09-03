@@ -1,0 +1,12 @@
+DIAR sherpa-onnx pyannote-seg-3.0 + eres2net: wall=14.7s audio=203s RTFx=13.8 segments=31 speakers_found=2 (truth=2 TTS voices, A B A B) peakRSS=458MB
+   spk0    0.03-   5.70
+   spk0    6.61-   9.70
+   spk0   10.32-  19.07
+   spk0   20.26-  28.60
+   spk0   29.43-  33.48
+   spk0   35.03-  40.94
+   spk0   41.46-  48.26
+   spk0   49.27-  58.08
+   spk0   59.08-  60.51
+   spk1   62.05-  65.83
+DIAR_DONE

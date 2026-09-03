@@ -1,0 +1,30 @@
+VLM mlx-community/Qwen3-VL-4B-Instruct-4bit: load=2.5s modelMem=3.10GB
+   frames=1: wall=5.4s prompt_tokens=634 prefill_tps=196.6 gen_tokens=82 gen_tps=38.1 peak=4.0GB peakMLX=4.00GB
+      out: What is on screen: A static test pattern with vertical color bars (red, green, yellow, blue, magenta, cyan), overlaid with diagonal and horizontal lines, a pixelated square, and faint dotted lines. No person is visible. 
+   frames=4: wall=11.9s prompt_tokens=2368 prefill_tps=272.4 gen_tokens=110 gen_tps=34.8 peak=4.1GB peakMLX=4.10GB
+      out: What is on screen: A static color bar test pattern with red, green, yellow, blue, magenta, and cyan vertical stripes. Overlaid are various abstract graphical elements: a thin horizontal gray line, a dotted line, a red-or
+   frames=8: wall=21.6s prompt_tokens=4680 prefill_tps=254.8 gen_tokens=98 gen_tps=31.0 peak=4.58GB peakMLX=4.58GB
+      out: What is on screen: A static, colorful test pattern with vertical bars of red, green, yellow, blue, and magenta. Overlaid are various abstract lines (solid and dotted), a gray square, a pixelated rectangle, and a few smal
+VLM mlx-community/Qwen3-VL-2B-Instruct-4bit: load=2.0s modelMem=1.78GB
+   frames=1: wall=2.4s prompt_tokens=634 prefill_tps=444.6 gen_tokens=79 gen_tps=84.6 peak=2.69GB peakMLX=2.69GB
+      out: The screen displays a standard color bar with vertical stripes of red, green, yellow, blue, magenta, and cyan, with some lines and a patterned square in the center, and no person is visible. There is no on-screen text. T
+   frames=4: wall=6.8s prompt_tokens=2368 prefill_tps=466.2 gen_tokens=120 gen_tps=74.0 peak=2.81GB peakMLX=2.81GB
+      out: The screen displays a static, multi-colored test pattern with vertical stripes of red, green, yellow, blue, magenta, and cyan. Overlaid on this are various abstract geometric shapes and lines, including a grey square tha
+   frames=8: wall=12.8s prompt_tokens=4680 prefill_tps=437.2 gen_tokens=120 gen_tps=59.4 peak=3.22GB peakMLX=3.22GB
+      out: The screen displays a static, multi-colored test pattern with vertical stripes of red, green, yellow, blue, magenta, and cyan. Overlaid on this are various abstract lines and shapes, including a grey square that appears 
+VLM mlx-community/SmolVLM2-2.2B-Instruct-mlx: FAILED ValueError('Could not load any image processor class for ~/.cache/huggingface/hub/models--mlx-community--SmolVLM2-2.2B-Instruct-mlx/snapshots/844516024a1c4400d34489b89ee067d794e432ed. The model configuration resolves to the following image processor classes: pil: SmolVLMImageProcessorPil, torchvision: SmolVLMImageProcessor. None of these classes could be imported. Missing optional dependencies: torchvision. Please install the missing dependencies or select a backend that is available in your environment.')
+VLM mlx-community/gemma-3n-E2B-it-4bit: load=4.3s modelMem=4.46GB
+   frames=1: wall=5.7s prompt_tokens=319 prefill_tps=95.6 gen_tokens=120 gen_tps=53.9 peak=5.48GB peakMLX=5.48GB
+      out: ## Analysis of the Image  **What is on screen:** The image displays a static screen with a series of vertical bars of solid colors arranged in a grid. The colors present are red, green, yellow, blue, pink, and cyan. Ther
+   frames=4: wall=6.7s prompt_tokens=1096 prefill_tps=250.8 gen_tokens=120 gen_tps=53.4 peak=8.37GB peakMLX=8.37GB
+      out: ## Analysis of the Images  Here's a breakdown of each image, addressing the requested elements:  **Image 1:**  * **On-screen content:** A static, colorful test pattern. It consists of a red, green, yellow, blue, and pink
+   frames=8: wall=9.1s prompt_tokens=2132 prefill_tps=314.3 gen_tokens=120 gen_tps=53.4 peak=9.97GB peakMLX=9.97GB
+      out: This is a **test pattern**.   Here's a breakdown of what's on screen:  * **On-screen elements:** A series of horizontal bars in various colors (red, green, yellow, blue, pink, cyan). There are also some geometric shapes 
+VLM_DONE
+VLM mlx-community/SmolVLM2-2.2B-Instruct-mlx (retry w/ torchvision): load=5.4s modelMem=4.49GB
+   frames=1: wall=186.4s prompt_tokens=1140 prefill_tps=6.2 gen_tps=22.6 peakMLX=5.25GB
+      out: ' The video is a static image with no visible characters, text, or motion.'
+   frames=4: wall=17.2s prompt_tokens=4389 prefill_tps=280.2 gen_tps=20.9 peakMLX=6.26GB
+      out: ' There is a person visible, no text, and the dominant motion is a diagonal line. The video is a test pattern.'
+   frames=8: wall=41.4s prompt_tokens=8721 prefill_tps=228.8 gen_tps=11.9 peakMLX=7.94GB
+      out: ' There is a series of colored bars with lines and dots. The dominant motion is the lines and dots moving across the screen. The video is a test pattern.'

@@ -1,0 +1,13 @@
+ASR mlx-community/whisper-large-v3-turbo: wall=40.4s audio=203s RTFx=5.0 words=557 peakMLX=2.16GB peakRSS=1903MB
+   sample: Okay so, um, today I want to talk about why most video editing tools feel mechanical. The problem is that they cut on a signal, not on meaning. Ah, let me give
+   words: [["Okay", 0.0, 0.26], ["so,", 0.26, 0.68], ["um,", 0.92, 1.2], ["today", 1.44, 1.74], ["I", 1.74, 1.96], ["want", 1.96, 2.2]]
+   filler tokens transcribed (um/uh): 12
+ASR mlx-community/distil-whisper-large-v3: wall=15.5s audio=203s RTFx=13.1 words=531 peakMLX=3.13GB peakRSS=3345MB
+   sample: Okay so, um, today I want to talk about why most video editing tools feel mechanical. The problem is that they cut on a signal, not on meaning. Ah, let me give
+   words: [["Okay", 0.0, 0.24], ["so,", 0.24, 0.76], ["um,", 1.04, 1.2], ["today", 1.6, 1.7], ["I", 1.7, 1.96], ["want", 1.96, 2.2]]
+   filler tokens transcribed (um/uh): 9
+ASR parakeet-tdt-0.6b-v3 (mlx): load=1.2s wall=6.3s audio=203s RTFx=32.1 tokens=956 peakMLX=5.53GB peakRSS=3345MB
+   sample: Okay, so, um, today I want to talk about why most video editing tools feel mechanical. The problem is that they cut on a signal, not on meaning. Ah, let me give
+   tokens: [[" Okay", 0.0, 0.24], [",", 0.4, 0.48], [" so", 0.48, 0.72], [",", 0.72, 0.96], [" um", 0.96, 1.28], [",", 1.36, 1.52], [" tod", 1.52, 1.68], ["ay", 1.68, 1.92]]
+   filler tokens transcribed (um/uh): 10
+ASR_DONE

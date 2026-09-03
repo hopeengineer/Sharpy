@@ -1,0 +1,7 @@
+VISION decode talkinghead1080.mp4  frames=300 wall=0.3s fps=1144.3 faces=0 textRegions=0 peakRSS=31MB
+VISION face talkinghead1080.mp4  frames=300 wall=1.5s fps=206.5 faces=0 textRegions=0 peakRSS=50MB
+VISION face+text talkinghead1080.mp4  frames=300 wall=3.7s fps=82.2 faces=0 textRegions=25 peakRSS=59MB
+VISION face+text+pose talkinghead1080.mp4  frames=300 wall=3.8s fps=79.6 faces=0 textRegions=25 peakRSS=80MB
+VISION decode test4k_h264.mp4  frames=300 wall=1.0s fps=285.8 faces=0 textRegions=0 peakRSS=92MB
+VISION face test4k_h264.mp4  frames=300 wall=2.2s fps=135.1 faces=0 textRegions=0 peakRSS=92MB
+VISION face+text test4k_h264.mp4  frames=300 wall=8.4s fps=35.7 faces=0 textRegions=324 peakRSS=107MB

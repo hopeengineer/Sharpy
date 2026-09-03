@@ -1,0 +1,6 @@
+VISION-QUALITY (Apple Vision, 22 real frames, ground truth labelled by viewing frames)
+   face_count exact       22/22
+   hands present/absent   21/21  (1 ambiguous frame excluded)
+   text recall            89/90 ground-truth lines found
+   extra text lines       11/115 reported lines with no ground-truth match (len>2; mostly tiny axis labels I did not label)
+   speed                  0.63 s/frame with accurate OCR + hand pose

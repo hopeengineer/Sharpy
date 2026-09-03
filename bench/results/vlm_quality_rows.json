@@ -1,0 +1,1508 @@
+{
+ "mlx-community/Qwen3-VL-2B-Instruct-4bit": [
+  {
+   "frame": "n01.jpg",
+   "sec": 2.3535478115081787,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE \u00b7 LIVE",
+     "-24.1 DB"
+    ],
+    "setting": "live video recording"
+   }
+  },
+  {
+   "frame": "n02.jpg",
+   "sec": 2.3947179317474365,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE - LIVE",
+     "-28.6 DB",
+     "3x better"
+    ],
+    "setting": "live video recording"
+   }
+  },
+  {
+   "frame": "n03.jpg",
+   "sec": 2.1413559913635254,
+   "pred": null
+  },
+  {
+   "frame": "n04.jpg",
+   "sec": 4.1648850440979,
+   "pred": null
+  },
+  {
+   "frame": "n05.jpg",
+   "sec": 2.416977882385254,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY PROMPT",
+     "1 get my voice closer to a st"
+    ],
+    "setting": "in a room with a desk and a keyboard"
+   }
+  },
+  {
+   "frame": "n06.jpg",
+   "sec": 2.3332369327545166,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "but closer",
+     "is a number."
+    ],
+    "setting": "in a room with a desk and a keyboard"
+   }
+  },
+  {
+   "frame": "n07.jpg",
+   "sec": 2.429403305053711,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a",
+     "studio target."
+    ],
+    "setting": "in a room with a wooden door and a wall"
+   }
+  },
+  {
+   "frame": "n08.jpg",
+   "sec": 2.5683209896087646,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a",
+     "studio target.",
+     "3\u00d7 closer",
+     "and I measured it myself."
+    ],
+    "setting": "in a room with a wall and a door"
+   }
+  },
+  {
+   "frame": "n09.jpg",
+   "sec": 2.2256557941436768,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n10.jpg",
+   "sec": 2.3861451148986816,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO",
+     "measures loud",
+     "never good"
+    ],
+    "setting": "in a room"
+   }
+  },
+  {
+   "frame": "n11.jpg",
+   "sec": 2.9976749420166016,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+11.9",
+     "0.0",
+     "0.0",
+     "0.0",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "video editor"
+   }
+  },
+  {
+   "frame": "n12.jpg",
+   "sec": 3.083981990814209,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     " +12.0",
+     " +4.5",
+     " 0.0",
+     " 0.0",
+     " a real engineer stops here",
+     " TOP END",
+     " ROOM",
+     " SPARKLE",
+     " SQUASH",
+     " MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "video editor frame"
+   }
+  },
+  {
+   "frame": "n13.jpg",
+   "sec": 2.978187084197998,
+   "pred": null
+  },
+  {
+   "frame": "n14.jpg",
+   "sec": 2.4300317764282227,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "top end, +12 dB",
+     "room stripped",
+     "fake sparkle",
+     "squashed flat"
+    ],
+    "setting": "video call"
+   }
+  },
+  {
+   "frame": "n15.jpg",
+   "sec": 2.286593198776245,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "CLIPPING"
+    ],
+    "setting": "in a room with a door and a wall"
+   }
+  },
+  {
+   "frame": "n16.jpg",
+   "sec": 2.4683399200439453,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT \u00b7 REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1."
+    ],
+    "setting": "in room"
+   }
+  },
+  {
+   "frame": "n17.jpg",
+   "sec": 2.611811876296997,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT \u2022 REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     " And it wasn't wrong."
+    ],
+    "setting": "in a room with a wall and a door"
+   }
+  },
+  {
+   "frame": "n18.jpg",
+   "sec": 4.018433094024658,
+   "pred": null
+  },
+  {
+   "frame": "n19.jpg",
+   "sec": 3.9923791885375977,
+   "pred": null
+  },
+  {
+   "frame": "n20.jpg",
+   "sec": 2.7033531665802,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "12 # ...rest of the prompt",
+     "13",
+     "14 Show me the before and a"
+    ],
+    "setting": "in a room with a keyboard"
+   }
+  },
+  {
+   "frame": "n21.jpg",
+   "sec": 2.879365921020508,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "12 # ...rest of the prompt",
+     "13 Show me the before and after.",
+     "14 Don't tell me the numbers.",
+     "costs you nothing"
+    ],
+    "setting": "in a room with a computer"
+   }
+  },
+  {
+   "frame": "n22.jpg",
+   "sec": 2.9445960521698,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "THE ONE THING IT WILL NEVER DO",
+     "Only one has a scale.",
+     "loud",
+     "12.0 dB",
+     "good",
+     "\u2013",
+     "Loud has a unit.",
+     "Good does not."
+    ],
+    "setting": "a graphic of a scale and a label"
+   }
+  }
+ ],
+ "mlx-community/Qwen3-VL-4B-Instruct-4bit": [
+  {
+   "frame": "n01.jpg",
+   "sec": 4.218986988067627,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE - LIVE",
+     "-24.1 DB"
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n02.jpg",
+   "sec": 4.857759952545166,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE - LIVE",
+     "-28.6 DB",
+     "AGENT - RESULT",
+     "3x better"
+    ],
+    "setting": "indoor office"
+   }
+  },
+  {
+   "frame": "n03.jpg",
+   "sec": 4.239238262176514,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "Asked it to fix something?",
+     "fix something?"
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n04.jpg",
+   "sec": 3.948578119277954,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n05.jpg",
+   "sec": 4.641516923904419,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "split",
+    "on_screen_text": [
+     "MY PROMPT",
+     "get my voice closer to a st"
+    ],
+    "setting": "indoor office"
+   }
+  },
+  {
+   "frame": "n06.jpg",
+   "sec": 4.183964967727661,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "But closer",
+     "is a number."
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n07.jpg",
+   "sec": 4.757858991622925,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "split",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a",
+     "studio target."
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n08.jpg",
+   "sec": 5.86515998840332,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "split",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a studio target.",
+     "FREQUENCY, 80 HZ \u2013 16 KHZ",
+     "5.0",
+     "DB OFF TARGET",
+     "3\u00d7 closer",
+     "and I measured it myself."
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n09.jpg",
+   "sec": 4.209633111953735,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO"
+    ],
+    "setting": "indoor office"
+   }
+  },
+  {
+   "frame": "n10.jpg",
+   "sec": 4.861464738845825,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO",
+     "measures loud",
+     "never good"
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n11.jpg",
+   "sec": 6.147384881973267,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+11.9",
+     "0.0",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9",
+     "+6",
+     "+3",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "graphic design"
+   }
+  },
+  {
+   "frame": "n12.jpg",
+   "sec": 6.1299049854278564,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+12.0",
+     "+4.5",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9",
+     "+6",
+     "+3",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "graphic design"
+   }
+  },
+  {
+   "frame": "n13.jpg",
+   "sec": 7.201392889022827,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+12.0",
+     "+7.5",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9",
+     "+6",
+     "+3",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE",
+     "And it took the tail off every single word."
+    ],
+    "setting": "graphic design"
+   }
+  },
+  {
+   "frame": "n14.jpg",
+   "sec": 4.605055093765259,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "top end, +12 dB",
+     "room stripped",
+     "fake sparkle",
+     "squashed flat"
+    ],
+    "setting": "indoor office"
+   }
+  },
+  {
+   "frame": "n15.jpg",
+   "sec": 4.101184129714966,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "CLIPPING"
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n16.jpg",
+   "sec": 5.100383043289185,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT - REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1."
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n17.jpg",
+   "sec": 5.451442241668701,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT - REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     "And it wasn't wrong."
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n18.jpg",
+   "sec": 5.7791807651519775,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT - REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     "And it wasn't wrong.",
+     "By the target I handed it,",
+     "that was a clean win."
+    ],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n19.jpg",
+   "sec": 4.030249834060669,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "indoor room"
+   }
+  },
+  {
+   "frame": "n20.jpg",
+   "sec": 4.988896131515503,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "# ...rest of the prompt",
+     "Show me the before and a"
+    ],
+    "setting": "indoor office"
+   }
+  },
+  {
+   "frame": "n21.jpg",
+   "sec": 5.407413959503174,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "# ...rest of the prompt",
+     "Show me the before and after.",
+     "Don't tell me the numbers.",
+     "costs you nothing"
+    ],
+    "setting": "indoor office"
+   }
+  },
+  {
+   "frame": "n22.jpg",
+   "sec": 5.523810625076294,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "split",
+    "on_screen_text": [
+     "THE ONE THING IT WILL NEVER DO",
+     "Only one has a scale.",
+     "loud",
+     "12.0 dB",
+     "good",
+     "Loud has a unit.",
+     "Good does not."
+    ],
+    "setting": "digital graphic"
+   }
+  }
+ ],
+ "mlx-community/gemma-4-E2B-it-4bit": [
+  {
+   "frame": "n01.jpg",
+   "sec": 2.0071909427642822,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE \u00b7 LIVE",
+     "-24.1 dB"
+    ],
+    "setting": "desk"
+   }
+  },
+  {
+   "frame": "n02.jpg",
+   "sec": 2.029261827468872,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "-28.6 dB",
+     "3x better"
+    ],
+    "setting": "Desk setup"
+   }
+  },
+  {
+   "frame": "n03.jpg",
+   "sec": 1.9409101009368896,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "Asked it to fix something?"
+    ],
+    "setting": "Indoor setting"
+   }
+  },
+  {
+   "frame": "n04.jpg",
+   "sec": 1.8582861423492432,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "Indoor setting"
+   }
+  },
+  {
+   "frame": "n05.jpg",
+   "sec": 1.9757847785949707,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "get my voice closer to a st"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n06.jpg",
+   "sec": 1.9315118789672852,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "But closer is a number."
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n07.jpg",
+   "sec": 2.0798449516296387,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a studio target."
+    ],
+    "setting": "Indoor"
+   }
+  },
+  {
+   "frame": "n08.jpg",
+   "sec": 2.6519720554351807,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a studio target.",
+     "FREQUENCY, 80 Hz - 16 KHz",
+     "5.0",
+     "DB OFF TARGET",
+     "3x closer",
+     "and I measured it myself."
+    ],
+    "setting": "Indoor"
+   }
+  },
+  {
+   "frame": "n09.jpg",
+   "sec": 1.983238935470581,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO"
+    ],
+    "setting": "Office"
+   }
+  },
+  {
+   "frame": "n10.jpg",
+   "sec": 2.0848278999328613,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO",
+     "measures loud never good"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n11.jpg",
+   "sec": 2.9610788822174072,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+11.9",
+     "0.0",
+     "0.0",
+     "0.0",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "a real engineer stops here",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "Data visualization"
+   }
+  },
+  {
+   "frame": "n12.jpg",
+   "sec": 3.1285598278045654,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+12.0",
+     "+4.5",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9",
+     "+6",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "Data visualization"
+   }
+  },
+  {
+   "frame": "n13.jpg",
+   "sec": 3.299923896789551,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+12.0",
+     "+7.5",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9",
+     "+6",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE",
+     "And it took the tail off every single word."
+    ],
+    "setting": "Data visualization"
+   }
+  },
+  {
+   "frame": "n14.jpg",
+   "sec": 2.169564723968506,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "top end, +12 dB",
+     "room stripped",
+     "fake sparkle",
+     "squashed flat"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n15.jpg",
+   "sec": 1.8412177562713623,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n16.jpg",
+   "sec": 2.251741886138916,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1."
+    ],
+    "setting": "Indoor"
+   }
+  },
+  {
+   "frame": "n17.jpg",
+   "sec": 2.4025800228118896,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     "And it wasn't wrong."
+    ],
+    "setting": "Indoor setting"
+   }
+  },
+  {
+   "frame": "n18.jpg",
+   "sec": 2.674401044845581,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     "And it wasn't wrong.",
+     "By the target I handed it, that was a clean win."
+    ],
+    "setting": "Indoor setting"
+   }
+  },
+  {
+   "frame": "n19.jpg",
+   "sec": 1.865312099456787,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "Indoor"
+   }
+  },
+  {
+   "frame": "n20.jpg",
+   "sec": 2.358609914779663,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "12",
+     "...rest of the prompt",
+     "13",
+     "14",
+     "Show me the before and a"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n21.jpg",
+   "sec": 2.597252130508423,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "12",
+     "# ...rest of the prompt",
+     "13",
+     "14",
+     "Show me the before and after.",
+     "Don't tell me the numbers.",
+     "costs you nothing"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n22.jpg",
+   "sec": 2.384592056274414,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "split",
+    "on_screen_text": [
+     "THE ONE THING IT WILL NEVER DO",
+     "Only one has a scale.",
+     "loud",
+     "12.0 dB",
+     "good",
+     "does not."
+    ],
+    "setting": "abstract graphic"
+   }
+  }
+ ],
+ "mlx-community/gemma-4-E4B-it-4bit": [
+  {
+   "frame": "n01.jpg",
+   "sec": 3.8515231609344482,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE \u00b7 LIVE",
+     "-24.1 dB"
+    ],
+    "setting": "plain background"
+   }
+  },
+  {
+   "frame": "n02.jpg",
+   "sec": 3.9232468605041504,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY VOICE \u00b7 LIVE",
+     "-28.6",
+     "dB",
+     "AGENT RESULT",
+     "3x better"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n03.jpg",
+   "sec": 3.416301965713501,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "Asked it to",
+     "fix something?"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n04.jpg",
+   "sec": 3.1187379360198975,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n05.jpg",
+   "sec": 3.5681567192077637,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "MY PROMPT",
+     "1 get my voice closer to a st"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n06.jpg",
+   "sec": 3.3093361854553223,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "But closer is a number."
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n07.jpg",
+   "sec": 3.5097882747650146,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "split",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a studio target."
+    ],
+    "setting": "plain background"
+   }
+  },
+  {
+   "frame": "n08.jpg",
+   "sec": 5.328952789306641,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "WHAT THE NUMBER SAID",
+     "My voice against a studio target.",
+     "FREQUENCY, 80HZ \u2013 16 KHZ",
+     "5.0",
+     "DB OFF TARGET",
+     "80",
+     "250",
+     "1k",
+     "4k",
+     "16k",
+     "3\u00d7 closer",
+     "and I measured it myself."
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n09.jpg",
+   "sec": 3.4389829635620117,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n10.jpg",
+   "sec": 3.6253750324249268,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "ONE THING IT WILL NEVER DO",
+     "measures loud",
+     "never good"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n11.jpg",
+   "sec": 5.778452157974243,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+11.9",
+     "0.0",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9-",
+     "+6+",
+     "+3",
+     "a real engineer stops here",
+     "0-",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "graphic display"
+   }
+  },
+  {
+   "frame": "n12.jpg",
+   "sec": 5.828181028366089,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+12.0",
+     "+4.5",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9-",
+     "+6-",
+     "+3",
+     "a real engineer stops here",
+     "0-",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE"
+    ],
+    "setting": "graphic display"
+   }
+  },
+  {
+   "frame": "n13.jpg",
+   "sec": 6.056468963623047,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "WHAT IT STACKED TO GET THERE",
+     "It cranked everything.",
+     "+12.0",
+     "+7.5",
+     "0.0",
+     "0.0",
+     "+12",
+     "+9-",
+     "+6-",
+     "+3",
+     "a real engineer stops here",
+     "TOP END",
+     "ROOM",
+     "SPARKLE",
+     "SQUASH",
+     "MY VOICE, EVERY SYLLABLE",
+     "And it took the tail off every single word."
+    ],
+    "setting": "graphic presentation"
+   }
+  },
+  {
+   "frame": "n14.jpg",
+   "sec": 3.9433329105377197,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "top end, +12 dB",
+     "room stripped",
+     "fake sparkle",
+     "squashed flat"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n15.jpg",
+   "sec": 3.2332141399383545,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "CLIPPING"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n16.jpg",
+   "sec": 3.9487240314483643,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT \u00b7 REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1."
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n17.jpg",
+   "sec": 4.193871974945068,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT \u00b7 REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     "And it wasn't wrong."
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n18.jpg",
+   "sec": 5.764978885650635,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": false,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "AGENT \u00b7 REPORT",
+     "Audio improved.",
+     "Target met. 5.0 dB, down from 15.1.",
+     "And it wasn't wrong.",
+     "By the target I handed it,",
+     "that was a clean win."
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n19.jpg",
+   "sec": 3.143740177154541,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n20.jpg",
+   "sec": 4.034076929092407,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "12 # ...rest of the prompt",
+     "13",
+     "14 Show me the before and a"
+    ],
+    "setting": "office"
+   }
+  },
+  {
+   "frame": "n21.jpg",
+   "sec": 4.467142820358276,
+   "pred": {
+    "person_visible": true,
+    "face_count": 1,
+    "hands_visible": true,
+    "layout": "talking_head",
+    "on_screen_text": [
+     "PROMPT.MD",
+     "12 # ...rest of the prompt",
+     "13",
+     "14 Show me the before and after.",
+     "Don't tell me the numbers.",
+     "costs you nothing"
+    ],
+    "setting": "indoor"
+   }
+  },
+  {
+   "frame": "n22.jpg",
+   "sec": 5.0150251388549805,
+   "pred": {
+    "person_visible": false,
+    "face_count": 0,
+    "hands_visible": false,
+    "layout": "card",
+    "on_screen_text": [
+     "THE ONE THING IT WILL NEVER DO",
+     "Only one has a scale.",
+     "0",
+     "+6",
+     "-10",
+     "+12",
+     "-20",
+     "loud",
+     "12.0 dB",
+     "good",
+     "Loud has a unit.",
+     "Good does not."
+    ],
+    "setting": "graphic design"
+   }
+  }
+ ]
+}

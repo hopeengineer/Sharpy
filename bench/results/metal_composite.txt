@@ -1,0 +1,16 @@
+METAL-COMPOSITE 4K H.264 fmt=nv12 layers=1 frames=900 wall=2.2s fps=413.3 peakRSS=45MB
+METAL-COMPOSITE 4K H.264 fmt=nv12 layers=2 frames=900 wall=3.4s fps=262.4 peakRSS=55MB
+METAL-COMPOSITE 4K H.264 fmt=nv12 layers=4 frames=900 wall=6.7s fps=135.3 peakRSS=81MB
+METAL-COMPOSITE 4K H.264 fmt=nv12 layers=6 frames=900 wall=10.2s fps=88.3 peakRSS=105MB
+METAL-COMPOSITE 4K ProRes fmt=nv12 layers=1 frames=900 wall=3.0s fps=300.8 peakRSS=379MB
+METAL-COMPOSITE 4K ProRes fmt=nv12 layers=2 frames=900 wall=5.1s fps=177.7 peakRSS=534MB
+METAL-COMPOSITE 4K ProRes fmt=nv12 layers=4 frames=900 wall=10.1s fps=88.9 peakRSS=746MB
+METAL-COMPOSITE 4K ProRes fmt=nv12 layers=6 frames=900 wall=15.6s fps=57.6 peakRSS=949MB
+METAL-COMPOSITE 4K H.264 fmt=bgra layers=1 frames=900 wall=3.2s fps=282.4 peakRSS=41MB
+METAL-COMPOSITE 4K H.264 fmt=bgra layers=2 frames=900 wall=5.2s fps=172.5 peakRSS=54MB
+METAL-COMPOSITE 4K H.264 fmt=bgra layers=4 frames=900 wall=10.3s fps=87.2 peakRSS=67MB
+METAL-COMPOSITE 4K H.264 fmt=bgra layers=6 frames=900 wall=15.8s fps=57.1 peakRSS=90MB
+METAL-COMPOSITE 4K ProRes fmt=bgra layers=1 frames=900 wall=3.0s fps=302.8 peakRSS=399MB
+METAL-COMPOSITE 4K ProRes fmt=bgra layers=2 frames=900 wall=5.1s fps=175.7 peakRSS=553MB
+METAL-COMPOSITE 4K ProRes fmt=bgra layers=4 frames=900 wall=10.2s fps=88.2 peakRSS=763MB
+METAL-COMPOSITE 4K ProRes fmt=bgra layers=6 frames=900 wall=15.7s fps=57.2 peakRSS=938MB

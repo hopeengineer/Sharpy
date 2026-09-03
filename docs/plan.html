@@ -1,0 +1,500 @@
+<title>Sharpy Plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f5f8f8; --surface: #ffffff; --ink: #122120; --ink-2: #3b4d4c; --muted: #66807e;
+    --rule: #d6e0df; --rule-strong: #b8c7c5; --accent: #0d8580; --accent-ink: #0a6d69; --accent-soft: #dcefee;
+    --ok: #2f8f4e; --warn: #b3731a; --hold: #b0413e; --code-bg: #eef3f3;
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1413; --surface: #131c1b; --ink: #e4eeed; --ink-2: #b9c9c7; --muted: #86a09d;
+      --rule: #22302e; --rule-strong: #344744; --accent: #3fc3bd; --accent-ink: #62d3ce; --accent-soft: #163634;
+      --ok: #5cc27a; --warn: #d9a04a; --hold: #e0706c; --code-bg: #182423;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1413; --surface: #131c1b; --ink: #e4eeed; --ink-2: #b9c9c7; --muted: #86a09d;
+    --rule: #22302e; --rule-strong: #344744; --accent: #3fc3bd; --accent-ink: #62d3ce; --accent-soft: #163634;
+    --ok: #5cc27a; --warn: #d9a04a; --hold: #e0706c; --code-bg: #182423;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .page { max-width: 1120px; margin: 0 auto; padding: 0 24px 96px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+  @media (max-width: 900px) { .page { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+
+  nav.toc { position: sticky; top: 24px; align-self: start; padding-top: 56px; font-size: 13px; }
+  nav.toc .label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  nav.toc a { color: var(--ink-2); text-decoration: none; display: grid; grid-template-columns: 24px 1fr; gap: 6px; }
+  nav.toc a:hover { color: var(--accent-ink); }
+  nav.toc .n { font-family: var(--mono); color: var(--muted); }
+
+  main { min-width: 0; }
+  header.masthead { padding: 56px 0 28px; border-bottom: 1px solid var(--rule-strong); margin-bottom: 40px; }
+  .stamp { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, max-content)); gap: 6px 28px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin-bottom: 22px; }
+  .stamp b { color: var(--ink-2); font-weight: 500; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(38px, 5.2vw, 56px); line-height: 1; letter-spacing: -.02em; margin: 0 0 16px; text-wrap: balance; }
+  .dek { font-size: 19px; line-height: 1.45; color: var(--ink-2); max-width: 64ch; margin: 0; }
+  .dek strong { color: var(--ink); font-weight: 600; }
+
+  section { margin-bottom: 56px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: -.01em; line-height: 1.15; margin: 0 0 6px; display: grid; grid-template-columns: 44px 1fr; align-items: baseline; text-wrap: balance; }
+  h2 .n { font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--accent-ink); letter-spacing: .02em; }
+  h3 { font-family: var(--display); font-weight: 700; font-size: 17.5px; margin: 28px 0 8px; letter-spacing: 0; }
+  p, li { max-width: 68ch; }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .lede { color: var(--ink-2); }
+  em { font-style: italic; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--code-bg); border: 1px solid var(--rule); padding: 14px 16px; overflow-x: auto; margin: 0 0 16px; border-radius: 4px; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  .rule-callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 14px 18px; margin: 18px 0 22px; max-width: 72ch; }
+  .rule-callout p { margin: 0; font-size: 17px; font-weight: 500; color: var(--ink); }
+
+  .tablewrap { overflow-x: auto; margin: 10px 0 20px; border: 1px solid var(--rule); border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+  thead th { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--surface); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td .hi { color: var(--accent-ink); font-weight: 600; }
+  .cap { font-size: 13px; color: var(--muted); margin: -10px 0 18px; max-width: 72ch; }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; padding: 1px 7px; border-radius: 3px; border: 1px solid var(--rule-strong); color: var(--ink-2); white-space: nowrap; }
+  .pill.ok { border-color: var(--ok); color: var(--ok); }
+  .pill.warn { border-color: var(--warn); color: var(--warn); }
+  .pill.hold { border-color: var(--hold); color: var(--hold); }
+  .pill.new { border-color: var(--accent); color: var(--accent-ink); }
+
+  .budget { display: grid; grid-template-columns: 90px 1fr 70px; gap: 10px 14px; align-items: center; font-size: 14px; margin: 8px 0 18px; max-width: 720px; }
+  .budget .lbl { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+  .budget .bar { height: 14px; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 2px; position: relative; overflow: hidden; }
+  .budget .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); opacity: .85; }
+  .budget .bar i.s2 { background: var(--accent-ink); opacity: .55; }
+  .budget .bar i.s3 { background: var(--muted); opacity: .5; }
+  .budget .val { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-2); font-size: 13px; }
+
+  .arch { font-family: var(--mono); font-size: 12.5px; line-height: 1.45; }
+  .milestone { border-top: 2px solid var(--rule-strong); padding-top: 14px; margin-top: 22px; }
+  .milestone h3 { margin-top: 0; display: grid; grid-template-columns: 44px 1fr; }
+  .milestone h3 .m { font-family: var(--mono); color: var(--accent-ink); font-weight: 500; }
+  .gate { display: grid; grid-template-columns: 52px 1fr; gap: 10px; margin: 6px 0; max-width: 72ch; }
+  .gate .g { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--accent-ink); padding-top: 4px; }
+  footer { border-top: 1px solid var(--rule); padding-top: 18px; font-size: 13px; color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Contents">
+  <div class="label">Contents</div>
+  <ol>
+    <li><a href="#s1"><span class="n">01</span>Decisions</a></li>
+    <li><a href="#s2"><span class="n">02</span>Measured baseline</a></li>
+    <li><a href="#s3"><span class="n">03</span>Architecture</a></li>
+    <li><a href="#s4"><span class="n">04</span>Spec amendments</a></li>
+    <li><a href="#s5"><span class="n">05</span>Perception stack</a></li>
+    <li><a href="#s6"><span class="n">06</span>Render verification</a></li>
+    <li><a href="#s7"><span class="n">07</span>Path to no human</a></li>
+    <li><a href="#s8"><span class="n">08</span>Components &amp; licences</a></li>
+    <li><a href="#s9"><span class="n">09</span>Build order</a></li>
+    <li><a href="#s10"><span class="n">10</span>Risks</a></li>
+    <li><a href="#s11"><span class="n">11</span>Reproducing</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="masthead">
+  <div class="stamp">
+    <span>MEASURED ON <b>Mac mini M4 · 4P+6E · 16 GB</b></span>
+    <span>OS <b>macOS 26.6.2</b></span>
+    <span>TOOLCHAIN <b>Swift 6.3.1 · ffmpeg 8.0.1 · MLX 0.32.2</b></span>
+    <span>DATE <b>2026-09-03</b></span>
+  </div>
+  <h1>Sharpy Plan</h1>
+  <p class="dek">A standalone, agent-first, professional-grade video editor for macOS. The agent operates it; a person sets intent once and helps only when asked; the long-run target is <strong>no human beyond recording</strong>. Every throughput figure here was measured on the target machine — anything not measured says so.</p>
+</header>
+
+<section id="s1">
+  <h2><span class="n">01</span>Decisions, and the measurement that locked each</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Decision</th><th>Locked by</th></tr></thead>
+    <tbody>
+      <tr><td><b>whisper-turbo + parakeet produce the transcript; their agreement is the per-word confidence. Apple <code>SpeechAnalyzer</code> is live preview only.</b></td><td>On the real narration (§2.7) Apple had 18 disagreement sites and ≈9 adjudicated errors including one that inverts meaning; whisper-turbo and parakeet each err only where they disagree with each other. Together they cost 13 s per 88 s of speech. Apple keeps the instant-preview role: 94× realtime, <span class="hi">20 MB</span> RSS, model in the OS.</td></tr>
+      <tr><td><b>whisper-large-v3-turbo is the verbatim engine.</b></td><td>The only model that kept all 12 spoken fillers on clean speech; ≈3 adjudicated errors on real speech. Disfluency editing needs verbatim.</td></tr>
+      <tr><td><b>Parakeet is the second engine, never the only one.</b></td><td>Best clean WER (0.57 %) and the only engine that got the meaning-critical "didn't" right on real speech, but ≈5 other errors and sub-word tokens that must be merged into words; 5.5 GB peak on 203 s, so it runs at ingest, never resident.</td></tr>
+      <tr><td><b>Gemma 4 E2B-4bit is the ingest perception model; Qwen3-VL-2B-4bit is the cheap resident model behind a JSON-repair layer.</b></td><td>On the user's real reel (§2.7), one frame per call: Gemma 4 E2B — 22/22 person and face, 21/22 hands, 87/90 text lines, <span class="hi">2.3 s per frame, 4.2 GB peak</span>. Qwen3-VL-4B matched it on text (90/90) at 5.0 s per frame. Qwen3-VL-2B was right on every frame it answered but returned malformed JSON on 5 of 22 — a format-discipline fault, not a perception one, so it stays resident (2.7 GB single-frame) only with repair-and-retry. Gemma 4 E4B: 90/90 text but 5.8 GB and 4.2 s per frame; it also failed an 8-image call outright. <b>No model invented an on-screen text line.</b> Gemma-3n hit 10 GB; SmolVLM2 ~1 090 tokens per frame and 7.9 GB — both excluded. Gemma 4 E2B additionally takes native audio + video.</td></tr>
+      <tr><td><b>A VLM can stay resident during playback.</b></td><td>2B peak 3.2 GB + four concurrent 4K ProRes decodes 2.35 GB + compositor &lt; 0.6 GB ≈ 6 GB. The earlier "evict during playback" rule now applies only to the 4B and large frame caches.</td></tr>
+      <tr><td><b>Apple Vision is the subject / text / pose tracker.</b></td><td>1080p: face 206 fps, face + OCR 82 fps, + body pose 80 fps, ≤ 80 MB. On-device, zero model files.</td></tr>
+      <tr><td><b>sherpa-onnx (pyannote-3.0 + eres2net) is diarization.</b></td><td>13.8× realtime, 458 MB, found exactly 2 of 2 speakers. Pure ONNX, no token, no PyTorch.</td></tr>
+      <tr><td><b>TransNetV2 on MPS is shot detection; PySceneDetect the cheap pre-pass.</b></td><td>235 fps at 1080p (594 MB) vs 636 fps / 159 fps at 4K. OmniShotCut (2026) puts all classic methods at F1 0.75–0.82: fine for a shot inventory; cut-frame precision comes from the decision record.</td></tr>
+      <tr><td><b>ffmpeg <code>signalstats</code> / <code>ebur128</code> / <code>cropdetect</code> are the signal-QC tier.</b></td><td>ebur128 over 203 s in 0.08 s; signalstats 206 fps 1080p / 53 fps 4K. QCTools' engine, LGPL, already present.</td></tr>
+      <tr><td><b>The compositor is a single-pass Metal kernel, not Core Image.</b></td><td>Core Image collapsed to 14.7 fps (naive) and 8.9 fps (pipelined) at four 4K layers regardless of pixel format. A compute kernel sampling the decoder's textures zero-copy did <span class="hi">135 fps at four 4K H.264 layers, 89 fps ProRes, 88 / 58 fps at six</span> — linear in layers, decode-bound, ≤ 1 GB RSS.</td></tr>
+      <tr><td><b>Swift + Metal + AVFoundation, one process, engine headless — the model runtime included.</b></td><td>Every Apple-native piece compiled first try on Swift 6.3.1 and runs at the numbers shown. The model path was then measured, not assumed: through <code>mlx-swift-lm</code> (pinned to main @ 2026-09-01; the <code>3.31.4</code> tag cannot load Gemma 4's shared-KV layers and degenerates on Qwen3-VL) the same 22 labelled frames score identically to Python — Gemma 4 E2B <span class="hi">22/22 person &amp; face, 85/90 text, 2.4 s per frame, 4.05 GB</span>; Qwen3-VL-2B 17/22 valid JSON (the same five malformed answers), 70/70 text, 2.8 s, 2.64 GB. One process, no Python sidecar. Anything linking MLX is built with <code>xcodebuild</code>.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s2">
+  <h2><span class="n">02</span>Measured baseline</h2>
+
+  <h3>2.1 Speech to text — 203 s, two TTS voices, 12 fillers, 528 reference words</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Model</th><th class="num">Wall</th><th class="num">× realtime</th><th class="num">Peak mem</th><th class="num">WER</th><th class="num">Fillers kept</th><th>Word timing</th></tr></thead>
+    <tbody>
+      <tr><td>Apple SpeechAnalyzer (macOS 26)</td><td class="num">2.2 s</td><td class="num"><span class="hi">94</span></td><td class="num"><span class="hi">20 MB</span></td><td class="num">5.30 %</td><td class="num">8 / 12</td><td>per word</td></tr>
+      <tr><td>whisper-large-v3-turbo (mlx)</td><td class="num">40.4 s</td><td class="num">5.0</td><td class="num">2.16 GB</td><td class="num">1.52 %</td><td class="num"><span class="hi">12 / 12</span></td><td>per word</td></tr>
+      <tr><td>distil-whisper-large-v3 (mlx)</td><td class="num">15.5 s</td><td class="num">13.1</td><td class="num">3.13 GB</td><td class="num">2.84 %</td><td class="num">9 / 12</td><td>per word</td></tr>
+      <tr><td>parakeet-tdt-0.6b-v3 (mlx)</td><td class="num">6.3 s</td><td class="num">32.1</td><td class="num">5.53 GB</td><td class="num"><span class="hi">0.57 %</span></td><td class="num">10 / 12</td><td>sub-word</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Clean synthetic speech; real-room WER will be higher for all four. The ranking is what transfers.</p>
+
+  <h3>2.2 Diarization, shots, subject tracking</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Task</th><th>Tool</th><th class="num">Throughput</th><th class="num">Peak mem</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>diarization</td><td>sherpa-onnx pyannote-3.0 + eres2net</td><td class="num">13.8× RT</td><td class="num">458 MB</td><td>2 / 2 speakers, 31 segments</td></tr>
+      <tr><td>shot boundaries</td><td>TransNetV2 (MPS)</td><td class="num">235 fps @1080p</td><td class="num">594 MB</td><td>—</td></tr>
+      <tr><td>shot boundaries</td><td>PySceneDetect</td><td class="num">636 fps @1080p · 159 fps @4K</td><td class="num">≤ 451 MB</td><td>—</td></tr>
+      <tr><td>shot boundaries</td><td>ffmpeg <code>select=gt(scene,…)</code></td><td class="num">756 fps @1080p</td><td class="num">145 MB</td><td>—</td></tr>
+      <tr><td>face</td><td>Apple Vision</td><td class="num">206 fps @1080p · 135 fps @4K</td><td class="num">50–92 MB</td><td><em>no faces in test media</em></td></tr>
+      <tr><td>face + OCR</td><td>Apple Vision</td><td class="num">82 fps @1080p · 36 fps @4K</td><td class="num">≤ 107 MB</td><td>OCR exercised</td></tr>
+      <tr><td>face + OCR + pose</td><td>Apple Vision</td><td class="num">80 fps @1080p</td><td class="num">80 MB</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>2.3 Decode and encode — VideoToolbox via ffmpeg 8.0.1, 30 s of noisy 4K@30</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Path</th><th class="num">fps</th><th class="num">Peak RSS</th></tr></thead>
+    <tbody>
+      <tr><td>4K H.264 HW decode</td><td class="num">87.5 <span class="pill">ffmpeg readback path; AVAssetReader → Metal did 286–301</span></td><td class="num">380 MB</td></tr>
+      <tr><td>4K HEVC HW decode</td><td class="num">115.5</td><td class="num">570 MB</td></tr>
+      <tr><td>4K ProRes 422 HQ HW decode</td><td class="num">157.6</td><td class="num">770 MB</td></tr>
+      <tr><td><b>4 × 4K H.264 concurrent</b></td><td class="num"><span class="hi">324 aggregate</span></td><td class="num">1.36 GB</td></tr>
+      <tr><td><b>4 × 4K ProRes concurrent</b></td><td class="num"><span class="hi">342 aggregate</span></td><td class="num">2.35 GB</td></tr>
+      <tr><td>4K → H.264 HW encode, 40 Mb/s</td><td class="num">59.3</td><td class="num">678 MB</td></tr>
+      <tr><td>4K → HEVC HW encode, 30 Mb/s</td><td class="num">57.7</td><td class="num">677 MB</td></tr>
+      <tr><td>4K → ProRes 422 HQ HW encode</td><td class="num">177.2</td><td class="num">833 MB</td></tr>
+      <tr><td>1080p → H.264 HW encode</td><td class="num">219</td><td class="num">220 MB</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>2.4 Compositor — Swift: HW decode → Core Image on Metal → 4K texture</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th class="num">Layers</th><th class="num">Core Image, naive</th><th class="num">Core Image, pipelined</th><th class="num">Metal kernel, NV12</th><th class="num">Metal kernel, BGRA</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="num">301 / 93.5</td><td class="num">387 / 75</td><td class="num"><span class="hi">413 / 301</span></td><td class="num">282 / 303</td></tr>
+      <tr><td class="num">2</td><td class="num">98 / 91.5</td><td class="num">123 / 12.9</td><td class="num"><span class="hi">262 / 178</span></td><td class="num">173 / 176</td></tr>
+      <tr><td class="num">4</td><td class="num">14.7 / 28.6</td><td class="num"><span class="pill hold">8.9 / 3.4</span></td><td class="num"><span class="hi">135 / 89</span></td><td class="num">87 / 88</td></tr>
+      <tr><td class="num">6</td><td class="num">—</td><td class="num"><span class="pill hold">3.7 / 1.0</span></td><td class="num"><span class="hi">88 / 58</span></td><td class="num">57 / 57</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Each cell is <b>H.264 / ProRes 422 HQ</b> fps at 4K output, 900 frames per run. Core Image materialises full-resolution intermediates per layer and collapses super-linearly no matter how decode is pipelined or what pixel format it is fed. A single-pass Metal compute kernel — decoder output wrapped as textures through <code>CVMetalTextureCache</code>, every layer sampled in one dispatch, YCbCr→RGB in the shader — scales linearly and is decode-bound: four 4K layers at 135 fps is 540 decoded frames per second. Process RSS stayed under 1 GB with six 4K ProRes streams. <b>Core Image is the wrong compositor; the kernel is M0.</b></p>
+
+  <h3>2.5 Vision-language — mlx-vlm, 1024 px frames, 120-token answer; tokens per frame: Qwen ≈ 585, Gemma 4 ≈ 270, SmolVLM2 ≈ 1 090</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Model</th><th class="num">Model mem</th><th class="num">1 frame</th><th class="num">4 frames</th><th class="num">8 frames</th><th class="num">Peak (8 f)</th><th class="num">Prefill</th><th class="num">Gen</th></tr></thead>
+    <tbody>
+      <tr><td><b>Qwen3-VL-2B-4bit</b></td><td class="num">1.78 GB</td><td class="num">2.4 s</td><td class="num">6.8 s</td><td class="num">12.8 s</td><td class="num"><span class="hi">3.22 GB</span></td><td class="num">~440 tok/s</td><td class="num">59–85 tok/s</td></tr>
+      <tr><td>Qwen3-VL-4B-4bit</td><td class="num">3.10 GB</td><td class="num">5.4 s</td><td class="num">11.9 s</td><td class="num">21.6 s</td><td class="num">4.58 GB</td><td class="num">~250 tok/s</td><td class="num">31–38 tok/s</td></tr>
+      <tr><td><b>Gemma 4 E2B-4bit</b> <span class="pill new">audio + video</span></td><td class="num">3.55 GB</td><td class="num">5.6 s</td><td class="num">6.4 s</td><td class="num"><span class="hi">7.9 s</span></td><td class="num">6.41 GB</td><td class="num">126→409 tok/s</td><td class="num">46–49 tok/s</td></tr>
+      <tr><td>Gemma 4 E4B-4bit</td><td class="num">5.15 GB</td><td class="num">6.8 s</td><td class="num">9.9 s</td><td class="num"><span class="pill hold">9.2 s ✗</span></td><td class="num">7.83 GB</td><td class="num">145→271 tok/s</td><td class="num">27 tok/s</td></tr>
+      <tr><td>gemma-3n-E2B-4bit</td><td class="num">4.46 GB</td><td class="num">5.7 s</td><td class="num">6.7 s</td><td class="num">9.1 s</td><td class="num"><span class="pill hold">9.97 GB</span></td><td class="num">~300 tok/s</td><td class="num">53 tok/s</td></tr>
+      <tr><td>SmolVLM2-2.2B</td><td class="num">4.49 GB</td><td class="num">186 s (cold)</td><td class="num">17.2 s</td><td class="num">41.4 s</td><td class="num"><span class="pill hold">7.94 GB</span></td><td class="num">~230 tok/s</td><td class="num">12–21 tok/s</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every model correctly described the test pattern and reported "no person visible" — except Gemma 4 E4B at 8 frames (✗), which answered as if no images were attached. <b>Derived indexing cost (Qwen 2B):</b> ≈ 1.6 s per 1024 px frame amortised. One frame per 5 s of footage → about <b>19 minutes per hour of footage</b>; the Qwen 4B is ~32 min/hour. <b>Gemma 4 E2B is ≈ 1.0 s per frame → ~12 min per hour</b>, at 6.4 GB peak — the ingest-time choice when the machine is otherwise idle, and the only one of these that also hears the audio. Dropping to 512 px cuts tokens ~4× (<em>unmeasured extrapolation</em>). Content-addressed embedding caching is mandatory because the agent revisits the same footage every turn.</p>
+
+  <h3>2.6 Memory budget on 16 GB — measured peaks, summed by phase</h3>
+  <div class="budget" aria-label="Memory budget by phase">
+    <div class="lbl">ingest</div><div class="bar"><i style="width:20.6%"></i></div><div class="val">≤ 3.3 GB</div>
+    <div class="lbl">edit</div><div class="bar"><i style="width:14.7%"></i><i class="s2" style="left:14.7%;width:20%"></i><i class="s3" style="left:34.7%;width:3.5%"></i></div><div class="val">≈ 6.1 GB</div>
+    <div class="lbl">render</div><div class="bar"><i style="width:14.7%"></i><i class="s2" style="left:14.7%;width:5.2%"></i><i class="s3" style="left:19.9%;width:3%"></i></div><div class="val">≈ 3.7 GB</div>
+    <div class="lbl">machine</div><div class="bar" style="background:none;border-color:var(--rule-strong)"></div><div class="val">16 GB</div>
+  </div>
+  <p class="cap">Ingest: worst single step (Qwen3-VL-2B 3.2 GB, sequential; 6.4 GB if Gemma 4 E2B runs the pass). Edit: four 4K ProRes decodes 2.35 GB + resident 2B 3.2 GB + compositor 0.56 GB. Render: ProRes encode 0.83 + decode 2.35 + signalstats 0.46. Ten gigabytes of headroom for the OS, frame cache and UI: the machine is not the constraint people assume — serialization and model choice are.</p>
+
+  <h3>2.7 Quality on real footage — the user's own reel, 22 frames + 88 s of speech</h3>
+  <p>Speed is not accuracy. Test set: <code>reel-12-NOSFX.mp4</code>, the Cowork edit of 2026-09-03 (1080×1920, 88 s) — a talking head intercut with motion-graphic cards, exactly the content type Sharpy is for. Ground truth for 22 frames (one every 4 s) was written by viewing each frame: person present, face count, hands, layout, and every readable line of on-screen text. Frames are not committed; the labels are in <code>bench/real/</code>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Apple Vision — face + hand pose + accurate OCR, 0.63 s per frame</th><th class="num">Result</th></tr></thead>
+    <tbody>
+      <tr><td>face count exact</td><td class="num"><span class="hi">22 / 22</span></td></tr>
+      <tr><td>hands present / absent</td><td class="num"><span class="hi">21 / 21</span> <span class="pill">one motion-blurred frame excluded</span></td></tr>
+      <tr><td>on-screen text recall</td><td class="num"><span class="hi">89 / 90</span> lines</td></tr>
+      <tr><td>extra lines reported</td><td class="num">11 / 115 — tiny axis labels I had not labelled; none invented</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Vision is the subject / OCR tracker. L2 face, hand and on-screen-text facts come from it, not from a VLM.</p>
+  <p><b>ASR on the real narration</b> — phone mic, room; wall: Apple 1.4 s · parakeet 3.1 s · whisper-turbo 10.2 s · distil 11.7 s. There is no reference transcript and I cannot listen, so every disagreement site was adjudicated against the on-screen cards, which restate the narration, and sentence context.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Engine</th><th class="num">Disagreement sites vs parakeet</th><th>Adjudicated errors</th><th class="num">Meaning-inverting</th></tr></thead>
+    <tbody>
+      <tr><td>parakeet-tdt-0.6b-v3</td><td class="num">—</td><td>≈5 — "tale" for <em>tail</em>, "your" for <em>you're</em>, "fixation smart model"</td><td class="num"><span class="pill ok">0</span></td></tr>
+      <tr><td>whisper-large-v3-turbo</td><td class="num">9</td><td>≈3</td><td class="num"><span class="pill hold">1</span> "did make it worse" for <em>didn't</em></td></tr>
+      <tr><td>distil-whisper-large-v3</td><td class="num">8</td><td>≈4</td><td class="num"><span class="pill hold">1</span> "will make it worse"</td></tr>
+      <tr><td>Apple SpeechAnalyzer</td><td class="num">18</td><td>≈9 — "pick" for <em>fix</em>, "they" for <em>it</em>, "cause" for <em>costs</em></td><td class="num"><span class="pill hold">1</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>No engine is clean on real speech. <b>Every adjudicated error lies in a word where whisper-turbo and parakeet disagree with each other; in every site where they agree, both were right.</b> So the transcript is produced by both — 13 s per 88 s together — and their per-word agreement is the confidence signal that feeds the L2 floor; on-screen text adjudicates where it restates the line. Apple's ASR is demoted to live preview. (<code>reel-12-CUT</code> and <code>-NOSFX</code> carry byte-identical audio; "NOSFX" refers to the graphics layer.)</p>
+  <p><b>VLM structured perception</b> — one JSON answer per frame (person, face count, hands, layout, every readable text line, setting), scored against the same labels:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Model</th><th class="num">Valid JSON</th><th class="num">Person &amp; face count</th><th class="num">Hands</th><th class="num">Layout</th><th class="num">Text recall</th><th class="num">Invented text</th><th class="num">s / frame</th><th class="num">Peak</th></tr></thead>
+    <tbody>
+      <tr><td><b>Gemma 4 E2B-4bit</b></td><td class="num">22 / 22</td><td class="num"><span class="hi">22 / 22</span></td><td class="num"><span class="hi">21 / 22</span></td><td class="num">19 / 22</td><td class="num">87 / 90</td><td class="num"><span class="pill ok">0</span></td><td class="num"><span class="hi">2.3</span></td><td class="num">4.17 GB</td></tr>
+      <tr><td>Qwen3-VL-4B-4bit</td><td class="num">22 / 22</td><td class="num"><span class="hi">22 / 22</span></td><td class="num">20 / 22</td><td class="num">20 / 22</td><td class="num"><span class="hi">90 / 90</span></td><td class="num"><span class="pill ok">0</span></td><td class="num">5.0</td><td class="num">4.01 GB</td></tr>
+      <tr><td>Gemma 4 E4B-4bit</td><td class="num">22 / 22</td><td class="num"><span class="hi">22 / 22</span></td><td class="num">19 / 22</td><td class="num"><span class="hi">21 / 22</span></td><td class="num"><span class="hi">90 / 90</span></td><td class="num"><span class="pill ok">0</span></td><td class="num">4.2</td><td class="num">5.76 GB</td></tr>
+      <tr><td>Qwen3-VL-2B-4bit</td><td class="num"><span class="pill hold">17 / 22</span></td><td class="num">17 / 22 — every parsed frame right</td><td class="num">15 / 22</td><td class="num">15 / 22</td><td class="num">67 / 70</td><td class="num"><span class="pill ok">0</span></td><td class="num">2.8</td><td class="num">2.69 GB</td></tr>
+    </tbody>
+  </table></div>
+  <p>How to read it. <em>Invented text</em> is the failure the spec forbids; every "extra" line any model reported was checked against the frame and was real — slider values, axis ticks, terminal line numbers, and an "AGENT · RESULT" badge label that two models read and Apple Vision's OCR missed. Qwen 2B's five failures were malformed JSON (a missing bracket), not wrong answers; on the 17 frames it answered it was right about every person and face. The layout misses cluster on the two "card above, small person inset" frames, which three of four models called <code>talking_head</code> — a definition edge, not a perception miss. <b>No model ever reported a person on a card frame or missed one on a talking-head frame.</b></p>
+  <p><b>Swift path</b> (<code>mlx-swift-lm</code>, <code>sharpy-probe</code>): Gemma 4 E2B 22/22 · 22/22 · hands 20/21 · layout 19/22 · text 85/90 · 2.4 s/frame · 4.05 GB; Qwen3-VL-2B 17/22 valid JSON · 70/70 text · 2.8 s · 2.64 GB — parity with the Python rows above on every axis.</p>
+  <p>The ranking on this footage is Gemma 4 E2B ≈ Qwen 4B ≈ Gemma E4B &gt; Qwen 2B on accuracy, and E2B (2.3 s) &lt; Qwen 2B (2.8) &lt; E4B (4.2) &lt; Qwen 4B (5.0) on cost. <b>Gemma 4 E2B is the ingest model on both axes.</b> Its 6.4 GB peak was an 8-images-per-call artefact; ingest is one frame per call, where it peaks at 4.2 GB. Gemma 4 E2B additionally accepts audio and video natively (<em>unmeasured here</em>).</p>
+</section>
+
+<section id="s3">
+  <h2><span class="n">03</span>Architecture</h2>
+  <pre class="arch">Sharpy.app — single process, Swift, engine headless
+
+ENGINE
+  Media     AVFoundation + VideoToolbox · Blackmagic RAW SDK · ffmpeg (LGPL build) for the long tail
+  Time      rational (CMTime) · drop-frame exact · source + record timecode
+  Document  immutable, content-addressed edit graph · every state has an id · branches are pointers
+  Render    Metal compositor · OpenColorIO (ACES) · emits an ID + coverage pass per frame  (§06)
+  Audio     graph with buses · EBU R128 metering · sub-frame edits
+  Verify    assertions block / warn / hold — evaluated on the RENDER, not the plan
+
+PERCEPTION — local, phase-scheduled
+  L0 container facts · L1 signal facts (ffmpeg filters, DSP)
+  L2 Apple ASR → whisper-turbo (verbatim) · sherpa diarization · Vision face / OCR / pose
+     TransNetV2 shots · Qwen3-VL-2B scene semantics · prosody → arousal · transcript → valence
+  L3 beats / argument graph / loops / tone — inferred WITH a basis and a confidence
+  Index: multi-resolution, content-addressed, runs over renders as well as sources
+
+AGENT SURFACE
+  MCP server   tools return decision records · Tasks for every long op · elicitation for help
+  MCP Apps     take-picker · cut-diff · "which face" · note surface — rendered in the agent host
+  CLI          same commands, for people and CI
+
+HUMAN SURFACE — thin, attachable, optional
+  Feed (what the agent did, with basis) · Assist queue · Cut diff · Override timeline
+  All four read the document the agent writes; none is required for an edit to complete</pre>
+  <div class="rule-callout"><p>Every edit decision carries a <code>basis</code>. A decision with no basis does not render. Everything else in this plan exists to make that rule enforceable.</p></div>
+</section>
+
+<section id="s4">
+  <h2><span class="n">04</span>The specification, amended</h2>
+  <p class="lede">The authored <em>Context-Aware Video Editing — Tool Specification</em> is the base and is adopted whole. These are the only changes, each with its reason.</p>
+
+  <h3>4.1 Basis table — two additions, one re-ordering</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Basis</th><th>Authority</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>safety_constraint</code> <span class="pill new">new · top</span></td><td>non-overridable, block-only</td><td>WCAG 2.3.1 three-flashes (Level A) with the stricter saturated-red test; loudness ceilings. The spec's "perceptual constraints" had no basis type at all — this is it. A client rule cannot outrank it.</td></tr>
+      <tr><td><code>client_rule</code></td><td>overridable only by safety</td><td>unchanged, no longer top</td></tr>
+      <tr><td><code>platform_req</code></td><td></td><td>unchanged</td></tr>
+      <tr><td><code>measured_material</code></td><td></td><td>unchanged</td></tr>
+      <tr><td><code>measured_norm</code></td><td>carries <code>evidence_class</code></td><td>see 4.4</td></tr>
+      <tr><td><code>learned_preference</code> <span class="pill new">new</span></td><td>below <code>measured_norm</code>; requires <code>n</code> + confidence</td><td>where the style profile writes; note-promotion covers <em>stated</em> preferences, this covers <em>inferred</em> ones</td></tr>
+      <tr><td><code>craft_rule</code></td><td></td><td>unchanged</td></tr>
+      <tr><td><code>structural_inference</code> <span class="pill new">new</span></td><td>L3 only; requires cited L2 evidence + confidence</td><td>see 4.2</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>4.2 L3 gets basis discipline</h3>
+  <p>Beat boundaries and purposes are the most consequential judgement in the system and were the only layer allowed to guess. Every L3 entry now carries <code>basis: structural_inference</code> with the L2 evidence that produced it — topic shift, prosodic reset, speaker turn, discourse marker — and a confidence. L3 confidence is subject to the same floor as L2, and a low-confidence beat boundary is the <em>correct</em> thing to escalate: it has the largest blast radius.</p>
+
+  <h3>4.3 The brief becomes falsifiable</h3>
+  <p>A one-sentence brief cannot be checked, which is why "misread the intent" was uncatchable. The brief gains fields that compile to assertions exactly as house rules already do:</p>
+  <pre><code>brief.register            grave | earnest | neutral | playful | irreverent
+brief.stakes              routine | elevated | high | irreversible
+brief.prohibited_devices  [whip, sound_on_cut, comedic_timing, meme_caption, …]
+brief.required_devices    [...]</code></pre>
+  <p>A brief that cannot compile is stored as a warning meaning <em>"I cannot check that I understood you."</em> Confidence floors scale with stakes: routine 0.70 · elevated 0.85 · high 0.95 · irreversible → <span class="pill hold">hold</span>.</p>
+
+  <h3>4.4 Norms carry an evidence class</h3>
+  <p><code>measured_norm</code> gains <code>evidence_class: correlational | outcome_linked</code> and a confidence interval, not just <code>n</code>. Corpus norms are correlational and survivorship-biased; retention-joined norms are outcome-linked. Prefer outcome-linked when both exist; disclose when acting on correlational; enforce a minimum <code>n</code>.</p>
+
+  <h3>4.5 Tone is measured bottom-up, never from faces</h3>
+  <p>Barrett et al. 2019 (<em>Psychological Science in the Public Interest</em>): emotion is not reliably inferable from facial movements. A facial-affect reading is therefore <b>not a <code>measured_material</code> fact</b> and is prohibited as a basis.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Quantity</th><th>Source</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>arousal / energy</td><td>acoustics: rate, pause structure, pitch variance, loudness dynamics</td><td><span class="pill ok">deterministic L1</span></td></tr>
+      <tr><td>valence</td><td>language — the transcript</td><td><span class="pill warn">model · SOTA CCC ≈ 0.63 · flag, never fact</span></td></tr>
+      <tr><td>affect from face</td><td>—</td><td><span class="pill hold">prohibited</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>The spec's tone map is inverted: derive tone from the material independently of the brief, then assert agreement. Mismatch is the misread-intent alarm.</p>
+
+  <h3>4.6 Decisions claim resources</h3>
+  <p>A decision declares what it occupies — screen region × time, audio bus × time, subject box × time — and the tool refuses one that double-claims. Two individually valid decisions can be jointly illegal; this catches it at decision time instead of at render. No prior art in editing; the closest analogue is register allocation.</p>
+
+  <h3>4.7 Verification gains <code>hold</code>; notes gain a source</h3>
+  <p>Modes become <code>block | warn | hold</code> — <code>hold</code> is "every assertion passed but confidence is low; do not ship." Notes become <code>{at, text, source: human | critic | retention | assertion}</code> so one loop serves a person, the agent's own review, and audience data.</p>
+
+  <h3>4.8 VFR policy</h3>
+  <p>L0 detects variable frame rate; nothing said what happens next. Normalise to CFR on ingest with a recorded time map, so every anchor resolves through one clock.</p>
+
+  <h3>4.9 Assertions run on the render</h3>
+  <p>As written, assertions evaluate the decision record. Under autonomy nobody watches the pixels, so ingest is media-agnostic and a render is just another asset: it goes back through L0→L2 and assertions compare <em>achieved</em> against <em>intended</em>.</p>
+</section>
+
+<section id="s5">
+  <h2><span class="n">05</span>Perception stack, chosen per measurement</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Layer</th><th>Component</th><th class="num">Measured</th><th>Licence</th><th class="num">RAM</th></tr></thead>
+    <tbody>
+      <tr><td>L1 audio</td><td>ffmpeg <code>ebur128</code>, <code>astats</code>, <code>silencedetect</code></td><td class="num">203 s in 0.08–0.09 s</td><td>LGPL</td><td class="num">~20 MB</td></tr>
+      <tr><td>L1 video</td><td>ffmpeg <code>signalstats</code>, <code>cropdetect</code>; PySceneDetect pre-pass</td><td class="num">53–206 fps</td><td>LGPL / BSD</td><td class="num">≤ 0.45 GB</td></tr>
+      <tr><td>L2 transcript</td><td>whisper-turbo + parakeet, per-word agreement = confidence; Apple SpeechAnalyzer for live preview only</td><td class="num">8.6× + 28× RT on real speech; Apple 94×</td><td>MIT / NVIDIA model licence / OS</td><td class="num">2.2 + 5.5 GB sequential / 0.02 GB</td></tr>
+      <tr><td>L2 speakers</td><td>sherpa-onnx pyannote-3.0 + eres2net</td><td class="num">13.8× RT</td><td>Apache-2.0 + model licences</td><td class="num">0.46 GB</td></tr>
+      <tr><td>L2 shots</td><td>TransNetV2 (MPS)</td><td class="num">235 fps</td><td>MIT</td><td class="num">0.6 GB</td></tr>
+      <tr><td>L2 subject / OCR / pose</td><td>Apple Vision</td><td class="num">82 fps @1080p</td><td>OS</td><td class="num">≤ 0.1 GB</td></tr>
+      <tr><td>L2 active speaker</td><td>LR-ASD — 0.84 M params, 0.51 GFLOPs</td><td class="num"><em>unmeasured</em></td><td>see repo</td><td class="num">small</td></tr>
+      <tr><td>L2 scene semantics</td><td>Qwen3-VL-2B-4bit resident; <b>Gemma 4 E2B-4bit for the ingest pass</b> (native audio + video)</td><td class="num">1.6 / 1.0 s per frame</td><td>Apache-2.0 / Gemma terms (<em>unverified this session</em>)</td><td class="num">3.2 / 6.4 GB</td></tr>
+      <tr><td>L2 prosody</td><td>DSP over the transcript's word spans</td><td class="num">trivial</td><td>—</td><td class="num">—</td></tr>
+      <tr><td>L3 structure</td><td>Qwen3-VL / text LLM over L2, with <code>structural_inference</code> basis</td><td class="num"><em>unmeasured</em></td><td>Apache-2.0</td><td class="num">shared</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Phase scheduling: ingest runs the heavy models sequentially (≤ 3.3 GB at any moment); playback keeps the 2B resident (6.1 GB total); render evicts models (3.7 GB).</p>
+</section>
+
+<section id="s6">
+  <h2><span class="n">06</span>Render verification — four tiers, model last</h2>
+  <ol>
+    <li><b>The renderer instruments itself.</b> The Metal compositor emits a Cryptomatte-style ID + coverage pass per frame. Spatial assertions — edge vs. subject box, safe area, text collision, subject-in-frame during a move — become exact intersection tests at every frame, not 6–8 fps samples. Cryptomatte is an open standard implemented by every major renderer and read by Nuke, Fusion and After Effects; no NLE emits it.</li>
+    <li><b>Signal QC on the output.</b> <code>signalstats</code> (temporal outliers, broadcast range, repeats), <code>cropdetect</code>, <code>ebur128</code> — measured at 53 fps for 4K, so a full pass on a 10-minute 4K master costs about 6 minutes of background time; on the 1080p proxy, about 90 s.</li>
+    <li><b>Differential: predicted vs. achieved.</b> The plan predicts loudness, contrast at text regions, luma; the render is measured; deltas are asserted. Catches wrong colour transforms, dropped frames, encoder-introduced desync.</li>
+    <li><b>The VLM, as proposer only.</b> It emits candidate observations; each compiles into a deterministic assertion or is discarded. It never holds the judge's seat — the spec's own rule ("the agent should never be the source of a claim") forbids it, and it sidesteps the documented VLM-judge failures: human disagreement, position bias, instability, hallucination.</li>
+  </ol>
+  <p>The honest limit: the intersection test is exact on the renderer's side and probabilistic on the subject-track side. The failure mode moves from "we never looked" to "the subject track was wrong" — attributable, measurable, and already gated by the L2 confidence floor.</p>
+</section>
+
+<section id="s7">
+  <h2><span class="n">07</span>The path to no human</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mechanism</th><th>Replaces</th><th>Verified</th></tr></thead>
+    <tbody>
+      <tr><td><b>Elicitation logging</b> — every question logged with category and resolution from v1</td><td>nothing; it is the burn-down instrument</td><td>—</td></tr>
+      <tr><td><b>Authored-once artifacts</b> — brief, policy, enrollment registry, style profile as versioned engine documents</td><td>four of five question categories: taste, intent, ground truth, permission</td><td>—</td></tr>
+      <tr><td><b>Regression gate</b> — finished edit measured against the creator's own catalogue band; outside → <code>hold</code></td><td>most of what "the edit is bad" means, pre-publish, no human</td><td>—</td></tr>
+      <tr><td><b>Selective review</b> — the agent requests a look only where expected information gain is highest. <b>The request rate is the autonomy metric.</b></td><td>blanket human review</td><td>—</td></tr>
+      <tr><td><b>Compile-rate residue</b> — per note, did it become a rule? The set that never compiles <em>is</em> what still needs a human.</td><td>declaring autonomy</td><td>—</td></tr>
+      <tr><td><b>Retention as ground truth</b></td><td>taste labelling</td><td>YouTube Analytics API: <code>elapsedVideoTimeRatio</code> × <code>audienceWatchRatio</code>, 100 points per video, <code>audienceType==ORGANIC</code>. Instagram: aggregate completion only. <b>TikTok: not available</b> to commercial API access. The fully autonomous loop closes on YouTube first.</td></tr>
+      <tr><td><b>A/B by retention</b></td><td>human taste judgement</td><td>works where a curve exists (YouTube)</td></tr>
+    </tbody>
+  </table></div>
+  <p>What does not go to zero: rights and legal; factual integrity when a speaker misspoke; relationship context that isn't in the footage; frontier taste. These reduce to policy authored once, or to a person. The product claim is <em>"zero questions on a routine video, escalate on the exceptional"</em> — achievable and honest.</p>
+</section>
+
+<section id="s8">
+  <h2><span class="n">08</span>Components and licences — verified</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Component</th><th>Licence</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td>FFmpeg, <b>LGPL build only</b></td><td>LGPL 2.1+ — <code>--enable-gpl</code> flips the whole build to GPL v2+; pin configure flags in CI and assert</td><td>long-tail decode, analysis filters</td></tr>
+      <tr><td>OpenColorIO</td><td>BSD-3-Clause</td><td>colour management, ACES 2.0 configs</td></tr>
+      <tr><td>OpenImageIO</td><td>Apache-2.0 (small pre-2023 BSD-3)</td><td>image I/O</td></tr>
+      <tr><td>OpenTimelineIO</td><td>Apache-2.0</td><td>interchange in/out; <b>not</b> the internal model</td></tr>
+      <tr><td>Blackmagic RAW SDK</td><td>free, no fees, GPU decode</td><td>BRAW day one</td></tr>
+      <tr><td>MLX, mlx-vlm, mlx-whisper, parakeet-mlx</td><td>MIT / Apache-2.0</td><td>local models</td></tr>
+      <tr><td>sherpa-onnx</td><td>Apache-2.0</td><td>diarization</td></tr>
+      <tr><td>TransNetV2</td><td>MIT</td><td>shots</td></tr>
+      <tr><td>Gemma 4 E2B (mlx-community 4-bit)</td><td>Gemma Terms of Use — <b>not verified this session</b>; check redistribution terms before bundling</td><td>ingest-time perception, audio + video</td></tr>
+      <tr><td>Apple Speech / Vision / VideoToolbox / Metal</td><td>OS frameworks</td><td>ASR, subject tracking, decode, render</td></tr>
+      <tr><td>Olive</td><td>GPLv3</td><td><span class="pill hold">excluded</span> cannot be embedded closed-source</td></tr>
+      <tr><td>MLT</td><td>LGPL 2.1 / GPL</td><td>not used; model isn't agent-shaped</td></tr>
+      <tr><td>Remotion</td><td>per-company commercial licence</td><td>not used; Revideo (MIT) if motion-graphics-as-code is ever needed</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s9">
+  <h2><span class="n">09</span>Build order with exit criteria</h2>
+  <p class="lede">Each milestone has a gate written against a number in §02. A milestone is not done until its gate is measured on the target machine.</p>
+
+  <div class="milestone">
+    <h3><span class="m">M0</span>Headless engine — everything inherits from this</h3>
+    <ul>
+      <li>Rational time; immutable content-addressed document; branch = pointer; command-log replay.</li>
+      <li>Pipelined decode (per-source thread, bounded ring, decoder-native pixel format) → Metal compositor → OCIO-managed frame.</li>
+    </ul>
+    <div class="gate"><span class="g">GATE</span><span>Four 4K ProRes layers composited to a 4K texture at <b>≥ 30 fps sustained with OCIO applied</b>. The bare kernel already measures 89 fps (H.264: 135); the gate exists to prove the margin survives colour management and the effect stack.</span></div>
+    <div class="gate"><span class="g">GATE</span><span>A complete edit — ingest, cut, place a graphic, render — driven by a script with <b>no UI process in existence</b>.</span></div>
+    <div class="gate"><span class="g">GATE</span><span>ffmpeg build flags asserted LGPL in CI.</span></div>
+  </div>
+
+  <div class="milestone">
+    <h3><span class="m">M1</span>Perception index</h3>
+    <ul>
+      <li>L0/L1 via ffmpeg filters; L2 via Apple ASR + whisper-verbatim, sherpa, Vision, TransNetV2, Qwen3-VL-2B; content-addressed embedding cache; index runs over renders as well as sources.</li>
+    </ul>
+    <div class="gate"><span class="g">GATE</span><span>One hour of 1080p talking-head footage fully indexed (L0–L2) in <b>≤ 25 min</b> on this machine. From measured rates: whisper-turbo 7 min + parakeet 2 min, diarization 4.3 min, shots 4.3 min, Vision faces at 206 fps (~0.5 min) with accurate OCR + hand pose only on shot changes and 1 fps keyframes (0.63 s each, ~10 min), VLM ~19 min at one frame per 5 s. Sequential that is ~47 min, so the gate holds only if ASR, Vision and diarization run <em>under</em> the VLM — whisper 2.2 GB + Vision 0.1 GB + VLM 3.2 GB fits; parakeet's 5.5 GB runs after. The overlap is a requirement, not an optimisation.</span></div>
+    <div class="gate"><span class="g">GATE</span><span>The "editor's report" for that hour reads specific, not generic — judged on three real recordings before any editing verb exists.</span></div>
+  </div>
+
+  <div class="milestone">
+    <h3><span class="m">M2</span>Decisions, assertions, agent surface</h3>
+    <ul>
+      <li><code>basis</code> enforced; assertions as <code>block | warn | hold</code>; resource claims; falsifiable brief; brief / policy / enrollment / style as versioned documents; elicitation logging.</li>
+      <li>MCP server with Tasks for every long op, elicitation as the help channel, MCP Apps for take-picker / cut-diff / "which face".</li>
+    </ul>
+    <div class="gate"><span class="g">GATE</span><span>A sound-cue change costs <b>&lt; 30 s</b> end to end via range preview.</span></div>
+    <div class="gate"><span class="g">GATE</span><span>A note resolves to a decision id, applies, and offers promotion; a preference repeated twice is promoted.</span></div>
+  </div>
+
+  <div class="milestone">
+    <h3><span class="m">M3</span>Render verification and human surface</h3>
+    <ul>
+      <li>Cryptomatte-style ID + coverage pass; signalstats / ebur128 tier; predicted-vs-achieved tier; VLM as proposer. Feed, assist queue, cut diff and override timeline attach to the running engine.</li>
+    </ul>
+    <div class="gate"><span class="g">GATE</span><span>Every spatial assertion evaluated on rendered frames, every frame.</span></div>
+    <div class="gate"><span class="g">GATE</span><span>Zero misses on a fixture set of deliberately broken renders — edge on face, illegal levels, dropped frame, off-target LUFS.</span></div>
+  </div>
+
+  <div class="milestone">
+    <h3><span class="m">M4</span>Autonomy instruments</h3>
+    <ul>
+      <li>Regression gate against own catalogue; selective review; compile-rate residue report; YouTube retention joined to the decision record; style profile writing <code>learned_preference</code>.</li>
+    </ul>
+    <div class="gate"><span class="g">GATE</span><span>Request rate per hour of footage reported and <b>falling across ten consecutive routine videos</b> for one creator.</span></div>
+  </div>
+</section>
+
+<section id="s10">
+  <h2><span class="n">10</span>Risks, re-ranked by measurement</h2>
+  <ol>
+    <li><b>Agent latency, not playback.</b> Playback headroom is proven. VLM indexing at ~19 min per hour is the wall-clock item; the levers are frame resolution, sampling density and the embedding cache. Measure prefill at 512 px first thing in M1.</li>
+    <li><b>Real-world perception accuracy.</b> Every number here is on clean synthetic media. Real rooms, real faces and real cross-talk will lower ASR, diarization and Vision accuracy; the L2 confidence floor exists for exactly this, but the floors must be calibrated on real footage before M2.</li>
+    <li><b>Compositor cost once OCIO and effects are in the kernel.</b> The bare kernel has a 3–4× margin over the 30 fps gate at four 4K layers; every colour transform and effect spends some of it, and none of that is measured yet. Fallback remains proxy playback (1080p H.264 encodes at 219 fps, decodes at 206) with full-resolution render only.</li>
+    <li><b>Elicitation fatigue.</b> An agent that asks 200 questions is worse than one that guesses. Batching and stakes-scaled thresholds are M2 deliverables, not polish.</li>
+    <li><b>TikTok has no retention API.</b> Shortform autonomy on that platform keeps a human eye longer; nothing in the architecture can change that.</li>
+  </ol>
+</section>
+
+<section id="s11">
+  <h2><span class="n">11</span>Reproducing the measurements</h2>
+  <p>Scripts, raw logs and the two TTS scripts live in the repository's <code>bench/</code> directory. Media is regenerated with macOS <code>say</code> and ffmpeg:</p>
+  <pre><code>say -v Samantha -r 175 -o a1.aiff -f bench/script_a.txt; say -v Daniel -r 170 -o b1.aiff -f bench/script_b.txt
+say -v Samantha -r 180 -o a2.aiff -f bench/script_a.txt; say -v Daniel -r 165 -o b2.aiff -f bench/script_b.txt
+ffmpeg -i a1.aiff -i b1.aiff -i a2.aiff -i b2.aiff \
+  -filter_complex "[0:a][1:a][2:a][3:a]concat=n=4:v=0:a=1,aresample=16000" -ac 1 speech16k.wav
+ffmpeg -f lavfi -i "testsrc2=size=3840x2160:rate=30:duration=30" \
+  -vf "noise=alls=18:allf=t+u,format=nv12" -c:v h264_videotoolbox -b:v 40M test4k_h264.mp4
+ffmpeg -i test4k_h264.mp4 -c:v prores_videotoolbox -profile:v 3 test4k_prores422hq.mov</code></pre>
+  <p>Not measured, and stated as such: real faces; noisy speech; BRAW decode; OCIO transform cost inside the compositor kernel; LR-ASD throughput; L3 structural inference quality. Each is an M1 measurement, not an assumption.</p>
+</section>
+
+<footer>Sharpy Plan · measured 2026-09-03 on the target Mac mini M4 16 GB · companion to <code>docs/PLAN.md</code> and <code>bench/</code> in the repository.</footer>
+</main>
+</div>

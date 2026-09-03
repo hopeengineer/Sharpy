@@ -1,0 +1,5 @@
+PySceneDetect ContentDetector media/test1080_h264.mp4: wall=1.4s fps=635.6 scenes=0 peakRSS=171MB
+PySceneDetect AdaptiveDetector media/test1080_h264.mp4: wall=1.4s fps=637.2 scenes=0 peakRSS=189MB
+PySceneDetect ContentDetector media/test4k_h264.mp4: wall=5.6s fps=159.5 scenes=0 peakRSS=421MB
+PySceneDetect AdaptiveDetector media/test4k_h264.mp4: wall=5.7s fps=159.2 scenes=0 peakRSS=451MB
+SCENE_DONE

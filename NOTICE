@@ -1,0 +1,12 @@
+Sharpy
+Copyright 2026 Sharpy contributors
+
+This product includes software developed by third parties under their own licences.
+See docs/PLAN.md §8 for the full component list and the licence of each. Two notes matter
+for redistribution:
+
+  * FFmpeg must be built and linked as LGPL 2.1+ (its default). Configuring with
+    --enable-gpl relicenses the whole build as GPL v2+; CI pins and asserts the flags.
+  * Model weights are NOT part of this repository and carry their own licences
+    (Gemma Terms of Use, Apache-2.0, NVIDIA model licences). Check them before
+    redistributing any bundle that includes weights.
