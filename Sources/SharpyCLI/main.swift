@@ -458,6 +458,62 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "diarize-batch":
+    // sharpy diarize-batch <audio-dir> --rttm-dir <out> [--cluster-threshold F]
+    //
+    // Batch mode exists so SpeakerKit can be scored by the same scorer, on the same corpus, as
+    // any competing engine. Per-file invocation would pay model load 216 times and the wall
+    // clock would say more about CoreML warm-up than about diarization.
+    guard let dir = argv.dropFirst().first, let outDir = option("--rttm-dir") else {
+        fail("usage: sharpy diarize-batch <audio-dir> --rttm-dir <out> [--cluster-threshold F]")
+    }
+    do {
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+        let names = try fm.contentsOfDirectory(atPath: dir)
+            .filter { $0.hasSuffix(".wav") || $0.hasSuffix(".m4a") || $0.hasSuffix(".mp4") }
+            .sorted()
+        guard !names.isEmpty else { fail("no audio in \(dir)") }
+        let indexer = SpeakerIndexer(clusterDistanceThreshold: option("--cluster-threshold").flatMap { Float($0) })
+        let sem = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var failure: Error?
+        Task {
+            var totalWall = 0.0, totalAudio = 0.0
+            for (i, name) in names.enumerated() {
+                let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
+                let stem = (name as NSString).deletingPathExtension
+                let t0 = Date()
+                do {
+                    let idx = try await indexer.index(url: url, asset: NodeID(contentOf: name))
+                    let dt = Date().timeIntervalSince(t0)
+                    let dur = (try? AudioSource(url: url).duration.seconds.doubleValue) ?? 0
+                    totalWall += dt; totalAudio += dur
+                    var rttm = ""
+                    for turn in idx.turns {
+                        let start = turn.range.start.seconds.doubleValue
+                        let len = turn.duration.seconds.doubleValue
+                        rttm += String(format: "SPEAKER %@ 1 %.3f %.3f <NA> <NA> spk%d <NA> <NA>\n",
+                                       stem, start, len, turn.speaker)
+                    }
+                    try rttm.write(toFile: (outDir as NSString).appendingPathComponent(stem + ".rttm"),
+                                   atomically: true, encoding: .utf8)
+                    print(String(format: "[%d/%d] %@ %7.1fs in %5.1fs (%5.1f× RT) -> %d speakers",
+                                 i + 1, names.count, stem, dur, dt, dur / max(dt, 0.001), idx.speakerCount))
+                } catch {
+                    // A corpus run must not die on one bad file; a missing row is visible to the
+                    // scorer, a crashed run is not.
+                    print("[\(i + 1)/\(names.count)] \(stem) FAILED: \(error)")
+                }
+                fflush(stdout)
+            }
+            print(String(format: "\n%d files, %.2f h audio in %.1f min = %.1f× realtime",
+                         names.count, totalAudio / 3600, totalWall / 60, totalAudio / max(totalWall, 0.001)))
+            sem.signal()
+        }
+        sem.wait()
+        if let failure { fail("diarize-batch: \(failure)") }
+    } catch { fail("diarize-batch: \(error)") }
+
 case "silence":
     // sharpy silence <file> [--below 25] [--min 0.4]
     guard let path = argv.dropFirst().first else { fail("usage: sharpy silence <file> [--below dB] [--min seconds]") }
@@ -535,6 +591,7 @@ default:
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
+      sharpy diarize-batch <dir> --rttm-dir <out> [--cluster-threshold F]
       sharpy speakers <file> [--cluster-threshold F] [--speakers N]
                             --speakers is exact; automatic counting over-counts on
                             multi-speaker audio (bench/results/diarization_sweep.txt)

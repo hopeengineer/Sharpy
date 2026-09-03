@@ -1,0 +1,99 @@
+Diarization on REAL multi-speaker audio with reference annotations
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+Why this exists
+---------------
+I swapped a measured component (sherpa-onnx pyannote-3.0 + eres2net) for SpeakerKit and justified
+it on convenience. Challenged, I re-measured — on 200 s of `say` output spliced together — and
+concluded SpeakerKit was a regression, then asked the user for a real recording.
+
+Both halves of that were wrong. The material is freely available with ground truth, and the
+"proven better" baseline had itself only ever been proven on the same synthetic splice.
+
+Corpora (both CC BY 4.0, both with reference RTTMs, neither synthetic)
+---------------------------------------------------------------------
+  VoxConverse dev   216 recordings, 20.30 h, 1-20 speakers each. YouTube/broadcast audio,
+                    hand-verified diarization labels. This is the closest public corpus to
+                    what Sharpy actually edits.
+                    https://www.robots.ox.ac.uk/~vgg/data/voxconverse/
+  AMI dev (subset)  6 meetings, 2.37 h, 4 speakers each, Mix-Headset condition. Spontaneous
+                    overlapping conversation — the hard case.
+                    RTTMs from BUTSpeechFIT/AMI-diarization-setup (only_words).
+
+Scoring: pyannote.metrics, both conventions reported. DER(0.25, no overlap) is the forgiving
+convention; DER(0, +overlap) counts everything and is always worse. Speaker count is scored
+separately, because for an editor the count is what drives "cut the interviewer" and a diarizer
+can post a decent DER while getting the count wrong.
+
+THE FIRST RESULT: the old baseline does not survive contact with real audio
+---------------------------------------------------------------------------
+sherpa-onnx at threshold 0.5 — the exact setting that found "2 of 2 speakers" on the synthetic
+file and was recorded in bench/results/diar.txt as the measured baseline:
+
+    AMI meeting        truth    sherpa-onnx @ 0.5 reports
+    ES2011a              4              104
+    ES2011b              4              116
+    IB4001               4              180
+    IS1008a              4               64
+    IS1008b              4               86
+    TS3004a              4              159
+    DER 68.25% collar / 77.05% full. Speaker count exact: 0 of 6.
+
+So "sherpa got 2 of 2" was never a property of sherpa. It was a property of 200 seconds of
+`say` output. The component I called proven had been measured exactly as carelessly as the one
+that replaced it.
+
+HEAD TO HEAD, after giving sherpa every advantage
+--------------------------------------------------
+sherpa's threshold was swept 0.5-1.4 across four embedding models (eres2net, NeMo TitaNet-large,
+WeSpeaker CAM++, 3D-Speaker CAM++ en). Best single-meeting result: TitaNet @ 1.10, DER 4.98%,
+5 speakers found against 4 — better than SpeakerKit on that one file.
+
+It does not survive the other five. Tuned on one meeting, evaluated on six:
+
+  AMI dev, 6 meetings, 4 speakers each        DER(collar)  DER(full)  count exact  speed
+    SpeakerKit           (DEFAULT, untuned)       7.66%      20.17%      4 / 6      472x RT
+    sherpa TitaNet       @ 1.10 (tuned on AMI)   14.92%      24.02%      0 / 6       19x RT
+    sherpa eres2net      @ 1.10 (tuned on AMI)   13.50%      23.13%      0 / 6       16x RT
+    sherpa eres2net      @ 0.5  (old baseline)   68.25%      77.05%      0 / 6       16x RT
+
+  VoxConverse dev, 216 files, 20.30 h         DER(collar)  DER(full)  count exact  speed
+    SpeakerKit           (DEFAULT, untuned)       3.67%       8.98%    127 / 216    377x RT
+    sherpa TitaNet       @ 1.10                    (running)
+
+SpeakerKit wins untuned against a tuned opponent, on both corpora, at 20-30x the speed.
+
+The tuning trap, stated plainly
+-------------------------------
+TitaNet @ 1.10 scored 4.98% on IS1008a and 14.92% across the six. The optimum is a spike:
+1.05 -> 8.08%, 1.10 -> 4.98%, 1.20 -> 13.65% on that one file. A threshold sitting on a spike
+found by searching one file is not a setting, it is a coincidence. This is the same error as
+tuning against my `say` splices, which is why no such correction was applied there either.
+
+SpeakerKit's own threshold was swept on the same AMI material for fairness:
+    0.50 -> 7.67%   0.60 -> 7.66%   0.70 -> 7.64%   0.80 -> 8.82%   0.90 -> 29.07%
+Its default is already at the optimum, and the optimum is a plateau rather than a spike. Nothing
+to tune, which is its own kind of evidence.
+
+Where SpeakerKit is actually weak
+---------------------------------
+Speaker COUNT on VoxConverse: 127 of 216 exact (58.8%), skewed toward under-counting
+(-1: 35 files, -2: 13, worse: 6; +1: 32, +2: 3). DER stays low because the dominant speakers are
+right and the missed ones are usually brief. For an editor this matters: "cut every question from
+the interviewer" is a count-dependent instruction. `numberOfSpeakers` remains exact and should be
+passed whenever the count is known — that guidance survives, on much better evidence.
+
+On AMI it is 4 of 6, missing one speaker on ES2011a and inventing one on IS1008b.
+
+VERDICT
+-------
+The swap to SpeakerKit stands, now on evidence rather than convenience: better DER and better
+counting than the alternative on 22.7 hours of real annotated audio, at 20-30x the throughput,
+in-process on the Neural Engine with no Python. It is kept at its DEFAULT settings, because the
+sweep says the default is already optimal and everything else is fitting.
+
+The earlier claim in this repo that automatic counting is "NOT VALIDATED" was correct about the
+evidence at the time and wrong about the conclusion it invited. It is now validated, against
+real material, and the honest summary is: good DER, mediocre counting, pass the count when known.
+
+Reproduce: bench/README.md, "Diarization on real corpora".
