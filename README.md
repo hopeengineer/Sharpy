@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. 81 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertion layer landed. 91 tests green.**
 
 | | |
 |---|---|
@@ -39,6 +39,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
+| Verify | 11 assertions gate every render — `block` / `warn` / **`hold`** |
 
 ### Try it
 
@@ -91,7 +92,32 @@ sharpy look in.mp4 --fps 1                      # faces, hands, on-screen text
 sharpy silence in.mp4                           # dead air, from the signal
 sharpy loudness in.mp4                          # EBU R128 + delivery targets
 sharpy bench --asset 4k.mov --color ACEScg      # the compositor gate
+sharpy verify --asset in.mp4 --loudness broadcast   # will this render, and should it?
 ```
+
+### Verification
+
+Assertions gate the render — they are not advisory. Three outcomes, and the third is the one
+most tools leave out:
+
+| | |
+|---|---|
+| `block` | the render does not happen |
+| `warn` | it happens, and the report says what is wrong |
+| **`hold`** | everything passed, but confidence is too low to ship unattended |
+
+`hold` exists because *"no assertion failed"* and *"this is fit to publish"* are different
+claims. An autonomous system needs the right to abstain; without it the only options are
+ship-anyway and fail-loudly, and the first is what actually happens.
+
+Two rules the layer enforces that are easy to get wrong:
+
+- **A check that cannot run fails.** Set a loudness target without measuring the mix and the
+  assertion reports that it could not run — it does not pass quietly. A QC layer that passes when
+  it has nothing to say is decorative.
+- **A client rule cannot override a safety constraint.** Flash limits and true-peak ceilings are
+  not preferences. A standing instruction can override craft, norms and learned taste; it cannot
+  switch off the things that exist to protect a viewer.
 
 ## Architecture
 

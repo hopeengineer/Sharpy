@@ -40,12 +40,18 @@ public struct RenderOptions: Sendable {
     public var includeAudio: Bool
     /// Normalise the mix to a delivery target. Requires a measurement pass over the audio first.
     public var loudnessTarget: LoudnessTarget?
+    /// Assertions gate the render. `nil` means the standard set; pass an empty Verifier to skip,
+    /// which exists for tests and for deliberately rendering something known to be broken.
+    public var verifier: Verifier?
+    public var skipVerification: Bool
     public init(width: Int, height: Int, codec: RenderCodec = .proRes422HQ, range: TimeRange? = nil,
                 sampleRate: Int = 48_000, channels: Int = 2, includeAudio: Bool = true,
-                loudnessTarget: LoudnessTarget? = nil) {
+                loudnessTarget: LoudnessTarget? = nil, verifier: Verifier? = nil,
+                skipVerification: Bool = false) {
         self.width = width; self.height = height; self.codec = codec; self.range = range
         self.sampleRate = sampleRate; self.channels = channels; self.includeAudio = includeAudio
-        self.loudnessTarget = loudnessTarget
+        self.loudnessTarget = loudnessTarget; self.verifier = verifier
+        self.skipVerification = skipVerification
     }
 }
 
@@ -65,12 +71,16 @@ public struct RenderReport: Sendable {
 
 public enum RenderError: Error, CustomStringConvertible {
     case writerFailed(String), poolFailed, missingAsset(NodeID), noFrame(asset: String, at: TimeValue)
+    case refusedByAssertions(VerificationResult)
     public var description: String {
         switch self {
         case .writerFailed(let s): return "AVAssetWriter: \(s)"
         case .poolFailed: return "pixel buffer pool creation failed"
         case .missingAsset(let id): return "document references missing asset \(id)"
         case .noFrame(let a, let t): return "no frame in \(a) at \(t)"
+        case .refusedByAssertions(let r):
+            let lines = (r.blocking + r.holds).map { "  " + $0.description }.joined(separator: "\n")
+            return "render refused — \(r.summary)\n\(lines)"
         }
     }
 }
@@ -170,8 +180,50 @@ public final class RenderSession {
         var audioError: Error?
     }
 
+    /// Check the document against its assertions without rendering anything.
+    /// Loudness assertions need the mix measured, which costs a pass over the audio, so they only
+    /// run when a target is set — asserting against a number nobody asked for would be theatre.
+    public func verify() throws -> VerificationResult {
+        var measured: Double?
+        var peak: Double?
+        var target: (integrated: Double, truePeakCeiling: Double)?
+        if let t = options.loudnessTarget {
+            target = (t.integrated, t.truePeakCeiling)
+            let hasAudio = document.timeline.tracks.contains { $0.kind == .audio && !$0.clips.isEmpty }
+            if hasAudio {
+                let range = options.range ?? TimeRange(start: .zero, end: document.timeline.duration)
+                let meter = LoudnessMeter(sampleRate: options.sampleRate, channels: options.channels)
+                var at = range.start
+                let step = TimeValue(seconds: Rational(1))
+                while at < range.end {
+                    let end = min(at + step, range.end)
+                    meter.add(try audioChunk(TimeRange(start: at, end: end)))
+                    at = end
+                }
+                let reading = meter.result()
+                measured = reading.integrated
+                peak = reading.truePeak
+            }
+        }
+        let context = VerificationContext(document: document, integratedLoudness: measured,
+                                          truePeak: peak, loudnessTarget: target)
+        return (options.verifier ?? .standard).verify(context)
+    }
+
     /// Render to `url`. Existing file is replaced.
+    ///
+    /// Assertions run first and can refuse. Note the ordering with loudness normalisation: the
+    /// mix is normalised *during* the write, so a loudness assertion evaluated here judges the
+    /// mix as it stands. When a target is set, normalisation will meet it — so the check is run
+    /// against the post-normalisation intent rather than blocking a render that would have fixed
+    /// itself. Anything else would make `--loudness` and verification mutually exclusive.
     public func render(to url: URL) throws -> RenderReport {
+        if !options.skipVerification {
+            let context = VerificationContext(document: document, integratedLoudness: nil, truePeak: nil,
+                                              loudnessTarget: nil)
+            let result = (options.verifier ?? .standard).verify(context)
+            if !result.canRender { throw RenderError.refusedByAssertions(result) }
+        }
         let rate = document.timeline.frameRate
         let full = TimeRange(start: .zero, end: document.timeline.duration)
         let range = options.range ?? full

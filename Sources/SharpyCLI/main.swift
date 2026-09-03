@@ -298,6 +298,43 @@ case "transcribe":
     sem.wait()
     if let failure { fail("transcribe: \(failure)") }
 
+case "verify":
+    // sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
+    guard let assetPath = option("--asset") else { fail("usage: sharpy verify --asset <file> [--loudness ...]") }
+    do {
+        let src = try SequentialFrameSource(url: URL(fileURLWithPath: assetPath))
+        let r = src.nominalFrameRate
+        let sampleRate = 48_000
+        let audio = try? AudioSource(url: URL(fileURLWithPath: assetPath), sampleRate: sampleRate)
+        var log = CommandLog(initial: Document(timeline: Timeline(name: "verify", frameRate: r, sampleRate: sampleRate)))
+        let asset = AssetRef(contentHash: "path:" + assetPath, path: assetPath, duration: src.duration,
+                             frameRate: r, hasVideo: true, hasAudio: audio != nil)
+        try log.append(.addAsset(asset))
+        try log.append(.addTrack(kind: .video, name: "V1"))
+        if audio != nil { try log.append(.addTrack(kind: .audio, name: "A1")) }
+        let id = log.head.assets.keys.first!
+        let d = Decision(kind: .cut, at: .zero, basis: .clientRule(rule: "verify the asset as given"))
+        try log.append(.placeClip(track: 0, clip: Clip(asset: id, source: TimeRange(start: .zero, end: TimeValue(frames: src.duration.frame(at: r), at: r)), start: .zero), decision: d))
+        if let audio { try log.append(.placeClip(track: 1, clip: Clip(asset: id, source: TimeRange(start: .zero, end: min(audio.duration, src.duration).alignedToSample(at: sampleRate)), start: .zero), decision: d)) }
+
+        let target: LoudnessTarget? = {
+            switch option("--loudness") {
+            case "broadcast", "-23": return .ebuR128
+            case "streaming", "-14": return .streaming
+            case .some(let v): return Double(v).map { LoudnessTarget(name: "\($0) LUFS", integrated: $0, truePeakCeiling: -1) }
+            case nil: return nil
+            }
+        }()
+        let session = try RenderSession(document: log.head, options: RenderOptions(width: src.width, height: src.height, sampleRate: sampleRate, loudnessTarget: target))
+        let result = try session.verify()
+        print(result.summary)
+        for f in result.blocking { print("  ✗ \(f.description)") }
+        for f in result.holds { print("  ⏸ \(f.description)") }
+        for f in result.warnings { print("  ⚠ \(f.description)") }
+        if result.canRender { print("  ✓ clear to render") }
+        exit(result.canRender ? 0 : 1)
+    } catch { fail("verify: \(error)") }
+
 case "report":
     // sharpy report <file> [--fps 0.25] — the editor's report: everything measured, said plainly.
     guard let path = argv.dropFirst().first else { fail("usage: sharpy report <file> [--fps N]") }
@@ -424,6 +461,7 @@ default:
                     [--remove-fillers] [--remove-words 1,5,10-12] [--tighten-pauses <seconds>]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--frames N] [--color <space>] [--display <space>]
       sharpy transcribe <file> [--segments] [--fillers] [--pauses <seconds>]
+      sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy silence <file> [--below dB] [--min seconds]
