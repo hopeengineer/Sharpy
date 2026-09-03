@@ -21,7 +21,7 @@ Premiere Pro output, not their manual toolset.
 | **Gemma 4 E2B-4bit is the ingest perception model; Qwen3-VL-2B-4bit is the cheap resident model behind a JSON-repair layer.** | On the user's real reel (§2.7), one frame per call: Gemma 4 E2B — 22/22 person and face, 21/22 hands, 87/90 text lines, **2.3 s per frame, 4.2 GB peak**. Qwen3-VL-4B matched it on text (90/90) at 5.0 s per frame. Qwen3-VL-2B was right on every frame it answered but returned malformed JSON on 5 of 22 — a format-discipline fault, not a perception one, so it stays resident (2.7 GB single-frame) only with repair-and-retry. Gemma 4 E4B: 90/90 text but 5.8 GB and 4.2 s per frame; it also failed an 8-image call outright. **No model invented an on-screen text line.** Gemma-3n-E2B hit **10 GB** — excluded. SmolVLM2: ~1 090 tokens/frame, 7.9 GB — excluded. Gemma 4 E2B additionally takes native audio + video. |
 | **A VLM *can* stay resident during playback on this machine.** | 2B peak 3.2 GB + four concurrent 4K ProRes decodes 2.3 GB + compositor < 0.6 GB ≈ 6 GB. Earlier "evict during playback" rule is downgraded to a policy for the 4B model and large frame caches. |
 | **Apple Vision is the subject/text/pose tracker.** | 1080p: face 206 fps, face + OCR 82 fps, + body pose 80 fps, ≤ 80 MB. On-device, Neural Engine, zero model files. |
-| **sherpa-onnx (pyannote-seg-3.0 + eres2net) is diarization.** | 13.8× realtime, 458 MB, found exactly 2 of 2 speakers. Pure ONNX, no HF token, no PyTorch. |
+| ~~**sherpa-onnx (pyannote-seg-3.0 + eres2net) is diarization.**~~ **RETIRED — see §2.2.** | The 2-of-2 result was 200 s of `say` output, not a measurement. On six real 4-person meetings the same configuration reports 64–180 speakers (DER 68.25 %). SpeakerKit replaces it on 22.7 h of annotated audio: 3.67 % DER on VoxConverse, 7.66 % on AMI, at 20–30× the speed. |
 | **TransNetV2 on MPS is shot detection; PySceneDetect is the cheap pre-pass.** | TransNetV2 235 fps at 1080p (594 MB). PySceneDetect 636 fps 1080p / 159 fps 4K. OmniShotCut (2026) reports all three classic methods at F1 0.75–0.82 — good enough for a shot inventory, not for cut-frame precision, which comes from the decision record anyway. |
 | **ffmpeg's `signalstats` / `ebur128` / `cropdetect` are the signal-QC tier.** | ebur128 over 203 s of audio in 0.08 s; signalstats 206 fps 1080p / 53 fps 4K; cropdetect 183 fps 4K. This is QCTools' engine, LGPL, already on the machine. |
 | **The compositor is a single-pass Metal kernel, not Core Image.** | Core Image collapsed to 14.7 fps (naive) and 8.9 fps (pipelined) at four 4K layers regardless of pixel format. A compute kernel sampling the decoder's textures zero-copy did **135 fps at four 4K H.264 layers, 89 fps ProRes, and 88 / 58 fps at six** — linear in layers, decode-bound, ≤ 1 GB RSS. Decoders alone: 324 fps aggregate H.264, 342 ProRes via ffmpeg. |
@@ -46,7 +46,8 @@ Premiere Pro output, not their manual toolset.
 
 | task | tool | throughput | peak mem | result |
 |---|---|---|---|---|
-| diarization | sherpa-onnx pyannote-3.0 + eres2net | 13.8× RT | 458 MB | 2 / 2 speakers, 31 segments |
+| diarization | ~~sherpa-onnx pyannote-3.0 + eres2net~~ RETIRED | 13.8× RT | 458 MB | 2 / 2 on synthetic audio; 64–180 speakers for 4 people on real meetings |
+| diarization | **SpeakerKit (pyannote via CoreML)** | **377–472× RT** | ≤ 0.5 GB | **3.67 % DER VoxConverse (20.3 h), 7.66 % AMI** |
 | shot boundaries | TransNetV2 (MPS) | 235 fps @1080p | 594 MB | — |
 | shot boundaries | PySceneDetect Content/Adaptive | 636 fps @1080p, 159 fps @4K | ≤ 451 MB | — |
 | shot boundaries | ffmpeg `select=gt(scene,…)` | 756 fps @1080p | 145 MB | — |
@@ -626,40 +627,41 @@ realtime versus 5×. Its two "lost" fillers are `uh` transcribed as `ah`, and `a
 justified on measurement**, which is how it should have been justified in the first place rather
 than on "MIT and builds under `swift build`".
 
-**Diarization's automatic speaker counting is NOT validated, and the earlier claim that it was is
-withdrawn.** It had only been run against a single-speaker file — the one case that cannot expose
-the failure. Against four files of known truth:
+**Diarization is measured on 22.7 hours of real annotated audio**, not on anything generated
+here: VoxConverse dev (216 YouTube/broadcast recordings, 20.30 h, 1–20 speakers) and AMI dev
+(6 meetings, 2.37 h, 4 speakers, spontaneous and overlapping). Both CC BY 4.0 with reference
+RTTMs, scored with `pyannote.metrics` in both conventions.
 
-| file | truth | SpeakerKit found |
-|---|---|---|
-| one voice | 1 | 1 ✓ |
-| two voices | 2 | **3** ✗ |
-| three voices | 3 | **4** ✗ |
-| the user's reel | 1 | 1 ✓ |
+| | DER (0.25 collar, no overlap) | DER (no collar, +overlap) | count exact | speed |
+|---|---|---|---|---|
+| **SpeakerKit, default** — VoxConverse | **3.67 %** | **8.98 %** | 127 / 216 | 377× RT |
+| **SpeakerKit, default** — AMI | **7.66 %** | **20.17 %** | 4 / 6 | 472× RT |
+| sherpa-onnx TitaNet @1.10 — AMI | 14.92 % | 24.02 % | 0 / 6 | 19× RT |
+| sherpa-onnx eres2net @1.10 — AMI | 13.50 % | 23.13 % | 0 / 6 | 16× RT |
+| sherpa-onnx eres2net @0.5 — AMI | 68.25 % | 77.05 % | 0 / 6 | 16× RT |
 
-A **sweep of the clustering parameters** (`bench/results/diarization_sweep.txt`) makes the finding
-sharper than "off by one". On the two-voice file the count reads **3 at every
-`clusterDistanceThreshold` from 0.50 to 1.20 and then drops straight to 1 at 1.30 — it never
-passes through 2.** No setting of that knob gets the file right. The extra cluster is not a
-loosely-attached fragment that a looser merge would absorb; it sits further from both real voices
-than they sit from each other. The three-voice file *is* fixable (4 → 3 at threshold 0.90–1.10),
-but that window leaves the two-voice file at 3, so there is no single correct setting and tuning
-to one is fitting the fixture. SpeakerKit's `minClusterSize` measured **completely inert** — 0, 3,
-6, 12, 25, 100 and 1000 all return the identical "3 speakers, 31 turns" — so it is no longer
-exposed: a public knob that provably does nothing invites an agent to fix over-counting with a
-lever connected to nothing.
+**The last row retires the baseline in §1.** `@0.5` is the exact configuration recorded above as
+"13.8× realtime, found exactly 2 of 2 speakers". On six four-person meetings it reports 64, 86,
+104, 116, 159 and 180 speakers. That row was never a measurement of sherpa-onnx; it was a
+measurement of 200 seconds of `say` output, and the same fixture is what made SpeakerKit look
+broken in the previous revision of this section. The fixture was the fault in both directions:
+hard splices of separate takes produce boundary artefacts real conversation does not have.
 
-The likeliest cause is the fixture, not the model: these files are hard splices of separately
-recorded takes, and the extra cluster (7.0 s, 4 % of speech) sits across the seams, which real
-conversation does not have. That is a hypothesis, not a result.
+sherpa was given every advantage — threshold swept 0.5–1.4 across four embedding models
+(eres2net, NeMo TitaNet-large, WeSpeaker CAM++, 3D-Speaker CAM++ en) — and its best configuration
+still loses by roughly 2× at 20–30× the cost. Its best single-meeting score, 4.98 %, sits on a
+spike (1.05 → 8.08 %, 1.10 → 4.98 %, 1.20 → 13.65 %) found by searching one file; across six
+meetings it collapses to 14.92 % with the count wrong every time. SpeakerKit's own threshold was
+swept on the same material and its default is already on the optimum, which is a plateau — there
+is nothing to tune, and an engine whose best setting must be searched for is one whose best
+setting will not transfer.
 
-`numberOfSpeakers` is honoured exactly (forcing 2 gives 2, split 66/34 against an expected 62/38;
-forcing 3 gives 3 with the true seam at 62.05 s in every run), so it is exposed and should be
-passed when the count is known. The measured baseline, sherpa-onnx pyannote-3.0 + eres2net, got
-2 of 2 on the same audio at 13.8× realtime; SpeakerKit runs at ~280×, so speed is not the
-deciding axis — **on automatic counting this swap is a regression, and it stands only because the
-count is usually known.** Settling it needs a real multi-speaker recording, which no amount of
-`say` can synthesise.
+**The weak axis is counting, not timing.** 127 of 216 exact on VoxConverse (58.8 %), skewed to
+under-counting (−1 on 35 files, −2 on 13; +1 on 32). DER stays low because the dominant speakers
+are right and the missed ones are brief, but an instruction like "cut every question from the
+interviewer" depends on the count in a way DER does not capture. `numberOfSpeakers` is honoured
+exactly and should be passed whenever the count is known — the same guidance as before, now on
+real evidence rather than on a splice.
 
 Still open in M2: resource claims and MCP Tasks for long operations. Still unbuilt: VLM scene
 semantics (the Swift probe works; wiring it into the index is the remaining M1 nicety), M3's

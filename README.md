@@ -27,7 +27,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts working; diarization landed but its automatic speaker counting is **not validated**. 150 tests green.**
+**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts and diarization, the latter measured on 22.7 h of real annotated audio (3.67 % DER on VoxConverse). 151 tests green.**
 
 | | |
 |---|---|
@@ -36,7 +36,7 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Colour | OpenColorIO 2.5.2, ACES built in. Linear→sRGB matches IEC 61966-2-1 within 2 code values |
 | Loudness | EBU R128 in Swift. Agrees with ffmpeg's `ebur128` within **0.06 LU** |
 | Speech | WhisperKit (verbatim, per-word probability) + Apple `SpeechAnalyzer`, voting per word |
-| Speakers | SpeakerKit (pyannote via CoreML). Correct when told the count; **automatic counting over-counts by one** — see below |
+| Speakers | SpeakerKit (pyannote via CoreML). 3.67 % DER on VoxConverse; counting is the weak axis — see below |
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
@@ -245,42 +245,41 @@ with no UI process in existence*, and it is met.
   and stakes and "made a serious video funny" becomes an assertion violation with a timecode.
   A brief that compiles to nothing warns that it cannot catch a misreading.
 
-### A measured limitation, stated plainly
+### Diarization, measured on 22.7 hours of real annotated audio
 
-Diarization's **automatic speaker counting is not validated.** Against known truth:
+Not on anything I generated. [VoxConverse dev](https://www.robots.ox.ac.uk/~vgg/data/voxconverse/)
+— 216 YouTube/broadcast recordings, 20.30 h, 1–20 speakers — and AMI dev, 6 meetings of
+spontaneous overlapping conversation. Both CC BY 4.0, both with reference annotations, scored with
+`pyannote.metrics` in both conventions because picking the flattering one is how a bad diarizer
+looks good.
 
-| file | truth | found |
-|---|---|---|
-| one voice | 1 | 1 ✓ |
-| two voices | 2 | **3** ✗ |
-| three voices | 3 | **4** ✗ |
-| a real single-speaker reel | 1 | 1 ✓ |
+| | DER (0.25 collar, no overlap) | DER (no collar, +overlap) | speaker count exact | speed |
+|---|---|---|---|---|
+| **SpeakerKit, default** — VoxConverse | **3.67 %** | **8.98 %** | 127 / 216 | 377× RT |
+| **SpeakerKit, default** — AMI | **7.66 %** | **20.17 %** | 4 / 6 | 472× RT |
+| sherpa-onnx TitaNet @1.10 — AMI | 14.92 % | 24.02 % | 0 / 6 | 19× RT |
+| sherpa-onnx eres2net @0.5 — AMI | 68.25 % | 77.05 % | 0 / 6 | 16× RT |
 
-A sweep of the clustering parameters says the two-voice case is not reachable at all: the count
-reads **3 at every threshold from 0.50 to 1.20, then drops straight to 1** — it never passes
-through 2. The extra cluster is not a loose fragment a looser merge would absorb; it sits further
-from both real voices than they sit from each other. The three-voice file *is* fixable (4 → 3 at
-threshold 0.90–1.10), but that window leaves the two-voice file at 3, so no single setting is
-right on both and tuning to one would be fitting the fixture. SpeakerKit's `minClusterSize` turned
-out to be **completely inert** — 0 through 1000 all give the identical answer — so it is not
-exposed at all.
+That last row is the interesting one. `@0.5` is the exact configuration this repo previously
+recorded as the *proven baseline*, on the strength of finding "2 of 2 speakers" in 200 seconds of
+spliced `say` output. On six four-person meetings it reports **64, 86, 104, 116, 159 and 180
+speakers.** The baseline was never proven; the fixture was just easy. sherpa was then given every
+advantage — threshold swept 0.5–1.4 across four embedding models — and its best setting still
+loses by 2× while running 20–30× slower.
 
-The likeliest cause is the fixture rather than the model: these files are hard splices of
-separately recorded takes, and the extra cluster (7.0 s, 4 % of speech) sits across the seams.
-Real conversation has no such seams. That is a hypothesis, not a result.
+**The weak axis is counting, not timing.** 127 of 216 exact on VoxConverse, skewed to
+under-counting. DER stays low because the dominant speakers are right and the missed ones are
+brief, but "cut every question from the interviewer" is count-dependent in a way DER doesn't
+capture. `--speakers N` is exact — pass it when you know.
 
-`numberOfSpeakers` is honoured exactly — `--speakers 2` gives 2, split 66/34 against an expected
-62/38 — so pass it when the count is known. The measured alternative,
-[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) pyannote-3.0 + eres2net, got 2 of 2 on the
-same audio, so this is a real regression against the baseline SpeakerKit replaced. Settling it
-needs a real multi-speaker recording, which no amount of `say` can synthesise.
+Kept at default settings on purpose: the threshold sweep puts the default on the optimum, and the
+optimum is a plateau. sherpa's best score came from a spike (1.05 → 8.08 %, 1.10 → 4.98 %,
+1.20 → 13.65 % on a single meeting) found by searching one file, which is a coincidence rather
+than a setting — across six meetings it collapses.
 
-This section exists because the first version of this README claimed diarization was validated on
-the strength of a run against a *single-speaker* file — the one case that cannot expose the bias.
-The full comparison is in [`bench/results/swift_asr_diarization.txt`](bench/results/swift_asr_diarization.txt),
-the parameter sweep in [`bench/results/diarization_sweep.txt`](bench/results/diarization_sweep.txt).
+Full comparison: [`bench/results/diarization_real_corpora.txt`](bench/results/diarization_real_corpora.txt).
 
-## Requirements
+## Requirements## Requirements
 
 - macOS 26 or later, Apple silicon
 - Xcode 26 toolchain (Swift 6.3)

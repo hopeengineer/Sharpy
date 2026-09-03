@@ -86,3 +86,39 @@ The clustering-parameter sweep behind the diarization verdict: `results/diarizat
 **Caveat that matters:** these multi-speaker files are hard concatenations of separately recorded
 voices, so their turn boundaries are harsher than real conversation. A diarization rule tuned to
 pass them may be fitting the fixture. A real multi-speaker recording is what would settle it.
+
+## Diarization on real corpora (added 2026-09-04)
+
+The synthetic `say` splices above are NOT adequate for diarization. They certified sherpa-onnx as
+"2 of 2 speakers correct" and condemned SpeakerKit as over-counting; on real audio both verdicts
+were wrong. Hard splices of separate takes produce boundary artefacts real conversation does not
+have. Use annotated corpora instead — they are a free download:
+
+```bash
+# VoxConverse dev: 216 YouTube/broadcast recordings, 20.30 h, 1-20 speakers, CC BY 4.0
+curl -LO https://www.robots.ox.ac.uk/~vgg/data/voxconverse/data/voxconverse_dev_wav.zip && unzip -q voxconverse_dev_wav.zip
+curl -L https://github.com/joonson/voxconverse/archive/refs/heads/master.zip -o vc.zip && unzip -q vc.zip   # reference RTTMs
+
+# AMI dev: spontaneous 4-speaker meetings, Mix-Headset. RTTMs from BUT's standard setup.
+curl -L https://github.com/BUTSpeechFIT/AMI-diarization-setup/archive/refs/heads/main.zip -o ami.zip && unzip -q ami.zip
+for M in IS1008a ES2011a TS3004a IB4001 IS1008b ES2011b; do
+  curl -Lo "ami_audio/$M.wav" "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/$M/audio/$M.Mix-Headset.wav"
+done
+
+# scoring stack
+uv venv --python 3.12 dvenv && uv pip install --python dvenv/bin/python sherpa-onnx pyannote.metrics
+
+# both engines emit RTTM, one scorer, same protocol
+sharpy diarize-batch audio --rttm-dir hyp_speakerkit
+dvenv/bin/python diar_sherpa.py --audio audio --out hyp_sherpa \
+  --seg models/sherpa-onnx-pyannote-segmentation-3-0/model.onnx \
+  --embedding models/nemo_en_titanet_large.onnx --threshold 1.10
+dvenv/bin/python score_der.py --ref voxconverse-master/dev --hyp hyp_speakerkit --name SpeakerKit
+```
+
+`score_der.py` reports DER in BOTH conventions — 0.25 s collar excluding overlap, and no collar
+including overlap — plus speaker-count accuracy separately, because a diarizer can post a decent
+DER while getting the count wrong, and for an editor the count is what drives "cut the
+interviewer".
+
+Results: `results/diarization_real_corpora.txt`.

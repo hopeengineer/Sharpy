@@ -7,30 +7,35 @@
 //
 // SpeakerKit runs pyannote through CoreML, so this is on-device and needs no Python.
 //
-// MEASURED LIMITATION — automatic speaker counting is not validated. Against known truth:
+// MEASURED on 22.7 hours of real annotated audio — VoxConverse dev (216 recordings, 20.30 h,
+// 1-20 speakers, YouTube/broadcast) and AMI dev (6 meetings, 2.37 h, 4 speakers, spontaneous
+// overlapping conversation). Both CC BY 4.0 with reference RTTMs. Full numbers and the
+// head-to-head against sherpa-onnx: bench/results/diarization_real_corpora.txt.
 //
-//     one voice     -> 1  correct        the user's real reel -> 1  correct
-//     two voices    -> 3  WRONG          three voices        -> 4  WRONG
+//                                DER(collar)   DER(full)   speaker count exact
+//     VoxConverse dev, 216           3.67%        8.98%        127 / 216
+//     AMI dev, 6 meetings            7.66%       20.17%          4 / 6
 //
-// It over-counts whenever more than one person speaks, and a threshold sweep says the two-voice
-// case is not reachable at all: the count reads 3 at every clusterDistanceThreshold from 0.50 to
-// 1.20 and then drops straight to 1 at 1.30, never passing through 2. The spurious cluster is not
-// a loosely-attached fragment a looser merge would absorb — it sits further from both real voices
-// than they sit from each other. three_voices IS fixable (4 -> 3 at threshold 0.90-1.10), but
-// that window leaves two_voices at 3, so no single setting is right on both, and tuning to one
-// would be fitting the fixture. Full sweep: bench/results/diarization_sweep.txt.
+// Kept at DEFAULT settings deliberately. The threshold was swept on AMI — 0.50 -> 7.67 %,
+// 0.60 -> 7.66 %, 0.70 -> 7.64 %, 0.80 -> 8.82 %, 0.90 -> 29.07 % — and the default already sits
+// on the optimum, which is a plateau rather than a spike. There is nothing here to tune, and that
+// is itself evidence: an engine whose best setting has to be searched for is an engine whose best
+// setting will not transfer.
 //
-// The likeliest cause is my fixture, not the model: these files are hard splices of separately
-// recorded takes, and the extra cluster (7.0 s, 4 % of speech) sits across the seams. Real
-// conversation has no such seams. That is a hypothesis, not a result — settling it needs a real
-// multi-speaker recording, which no amount of `say` can synthesise.
+// THE WEAK AXIS IS COUNTING, NOT TIMING. On VoxConverse only 127 of 216 files get the number of
+// speakers exactly right (58.8 %), skewed toward under-counting: -1 on 35 files, -2 on 13, +1 on
+// 32. DER stays low because the dominant speakers are right and the missed ones are brief — but
+// an editing instruction like "cut every question from the interviewer" is count-dependent in a
+// way that DER does not capture. So: pass `numberOfSpeakers` whenever the count is known. It is
+// honoured exactly.
 //
-// `numberOfSpeakers` is honoured exactly when supplied — forcing 2 on the two-voice file gives 2
-// with a 66/34 split against an expected 62/38 — so pass it when the count is known.
-//
-// For reference, the measured alternative: sherpa-onnx pyannote-3.0 + eres2net found 2 of 2 on the
-// same audio at 13.8x realtime. SpeakerKit runs at ~280x. Speed is not the deciding axis here.
-//
+// Earlier revisions of this file called automatic counting "not validated" on the strength of
+// 200 s of `say` output spliced together, where it over-counted every multi-speaker case. That
+// fixture was the problem, not the model: hard splices of separate takes produce boundary
+// artefacts real conversation does not have. The same fixture had also certified this engine's
+// predecessor, sherpa-onnx, as "2 of 2 speakers correct". On the AMI meetings that same
+// configuration reports 64, 86, 104, 116, 159 and 180 speakers for four people.
+
 // Speaker labels are per-recording: "speaker 0" in one file has nothing to do with "speaker 0" in
 // another. SpeakerKit exposes per-speaker centroid embeddings for linking identities across
 // files, which is what an enrolment registry would eventually use; that is deliberately not done
