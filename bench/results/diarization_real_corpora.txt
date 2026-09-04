@@ -97,3 +97,68 @@ evidence at the time and wrong about the conclusion it invited. It is now valida
 real material, and the honest summary is: good DER, mediocre counting, pass the count when known.
 
 Reproduce: bench/README.md, "Diarization on real corpora".
+
+
+===========================================================================================
+ROUND 2 (2026-09-04): two more candidates, because "it wins" is not "it is the best available"
+===========================================================================================
+
+SpeakerKit had beaten sherpa-onnx. That is one comparison, not a survey, and its weak axis —
+speaker COUNT, 127/216 on VoxConverse — is the axis an editing agent leans on hardest. So two
+more engines from FluidAudio (Apache-2.0, CoreML) were measured on exactly the same material:
+
+  clustering   pyannote segmentation + embedding clustering. Same family as SpeakerKit, so a
+               difference is implementation rather than architecture.
+  sortformer   NVIDIA Sortformer, end-to-end, models speakers jointly and predicts OVERLAPPING
+               speech directly instead of clustering embeddings after the fact.
+
+AMI dev, 6 meetings, 4 speakers each      DER(collar)  DER(full)  count exact   speed
+  SpeakerKit            (default)             7.66%      20.17%      4 / 6       472x RT
+  sherpa eres2net       @1.10 tuned          13.50%      23.13%      0 / 6        16x RT
+  FluidAudio clustering                      25.42%      34.37%      1 / 6       136x RT
+  FluidAudio Sortformer                      51.49%      53.95%    * 6 / 6       347x RT
+
+VoxConverse dev, 216 files, 20.30 h       DER(collar)  DER(full)  count exact   speed
+  SpeakerKit            (default)             3.67%       8.98%    127 / 216     377x RT
+  FluidAudio clustering                      20.61%      24.49%     69 / 205 †   136x RT
+  FluidAudio Sortformer                      28.37%      30.31%     91 / 216     347x RT
+
+* THE ASTERISK IS THE POINT. Sortformer scored a perfect 6/6 on speaker count, better than
+  SpeakerKit and better than everything else measured. It is worthless.
+  `OfflineSortformerConfig.numSpeakers` is `public let numSpeakers: Int = 4` — a compile-time
+  constant. Every AMI meeting has exactly four speakers. The model was not counting; it was
+  returning 4, and AMI happened to agree six times out of six.
+
+  VoxConverse, where speaker counts run 1 to 20, settles it: 42.1% exact, under-counting on 111
+  of 216 files, by as much as -16. A model that cannot represent a fifth speaker cannot diarize
+  a five-person conversation, and no amount of tuning changes that.
+
+  This is the same trap as the `say` splices and the 4.98% threshold spike, met for a third time
+  in one session, and it was nearly reported as a win. What caught it was not suspicion of
+  Sortformer — it was that 100% counting sat next to 51% DER, and those two numbers cannot both
+  be true of a working diarizer. When a result is better than it has any right to be, the fixture
+  is usually answering instead of the model.
+
+† FluidAudio's clustering backend CRASHED after 205 of 216 files:
+  "libc++abi: terminating due to uncaught exception ... Failed to allocate memory IOSurface
+  object". Its score is over the 205 that completed and is therefore slightly favourable to it —
+  it does not include whatever it would have done on the 11 files it died on. It loses by 5x
+  regardless, so the missing files change nothing, but the number is not clean and should not be
+  quoted as though it were.
+
+A note on the scorer, since it was wrong in a way that mattered
+--------------------------------------------------------------
+`score_der.py` originally loaded RTTM with `ann[Segment(start, end)] = label`, which writes to a
+default track — so two speakers talking over the same span silently overwrote each other, and the
+scorer discarded exactly the speech that an overlap-aware model exists to find. Fixed to give
+every line its own track id. It changed Sortformer's full DER by 0.02 points, so it was NOT the
+explanation for its score, but a scorer that penalises the property one candidate is being tested
+for is not a fair scorer whether or not it happens to change the verdict.
+
+VERDICT after four engines
+--------------------------
+SpeakerKit stays, at its default settings, having now beaten sherpa-onnx (4 configurations across
+4 embedding models), FluidAudio's clustering pipeline, and Sortformer, on 22.7 hours of real
+annotated audio, on both DER conventions and on speaker counting, while being the fastest of the
+four. Its weakness is unchanged and unfixed: 127/216 exact counts, skewed to under-counting. Pass
+`--speakers N` when the count is known.

@@ -19,15 +19,23 @@ from pyannote.metrics.diarization import DiarizationErrorRate
 
 
 def load_rttm(path):
+    """Load an RTTM, preserving OVERLAP.
+
+    `ann[segment] = label` writes to a default track, so two speakers talking over the same span
+    silently overwrite each other and the file loses exactly the speech that overlap-aware
+    diarizers exist to find. Giving every line its own track id keeps them. This mattered: the
+    first version of this scorer reported 51.49% DER for Sortformer, which predicts overlap, and
+    much of that was the scorer discarding its output rather than the model being wrong.
+    """
     ann = Annotation()
-    for line in open(path):
+    for i, line in enumerate(open(path)):
         p = line.split()
         if not p or p[0] != "SPEAKER":
             continue
         start, dur, spk = float(p[3]), float(p[4]), p[7]
         if dur <= 0:
             continue
-        ann[Segment(start, start + dur)] = spk
+        ann[Segment(start, start + dur), i] = spk
     return ann
 
 

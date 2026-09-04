@@ -475,7 +475,20 @@ case "diarize-batch":
             .filter { $0.hasSuffix(".wav") || $0.hasSuffix(".m4a") || $0.hasSuffix(".mp4") }
             .sorted()
         guard !names.isEmpty else { fail("no audio in \(dir)") }
-        let indexer = SpeakerIndexer(clusterDistanceThreshold: option("--cluster-threshold").flatMap { Float($0) })
+        // One switch, three engines, one output format — so the scorer compares diarizers rather
+        // than comparing harnesses.
+        let which = option("--diarizer") ?? "speakerkit"
+        let speakerKit = SpeakerIndexer(clusterDistanceThreshold: option("--cluster-threshold").flatMap { Float($0) })
+        let fluid: FluidSpeakerIndexer? = {
+            switch which {
+            case "clustering": return FluidSpeakerIndexer(backend: .clustering)
+            case "sortformer": return FluidSpeakerIndexer(backend: .sortformer)
+            default: return nil
+            }
+        }()
+        if which != "speakerkit" && fluid == nil {
+            fail("unknown --diarizer \(which); use speakerkit, clustering or sortformer")
+        }
         let sem = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var failure: Error?
         Task {
@@ -485,7 +498,12 @@ case "diarize-batch":
                 let stem = (name as NSString).deletingPathExtension
                 let t0 = Date()
                 do {
-                    let idx = try await indexer.index(url: url, asset: NodeID(contentOf: name))
+                    let idx: SpeakerIndex
+                    if let fluid {
+                        idx = try await fluid.index(url: url, asset: NodeID(contentOf: name))
+                    } else {
+                        idx = try await speakerKit.index(url: url, asset: NodeID(contentOf: name))
+                    }
                     let dt = Date().timeIntervalSince(t0)
                     let dur = (try? AudioSource(url: url).duration.seconds.doubleValue) ?? 0
                     totalWall += dt; totalAudio += dur
@@ -592,7 +610,7 @@ default:
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
-      sharpy diarize-batch <dir> --rttm-dir <out> [--cluster-threshold F]
+      sharpy diarize-batch <dir> --rttm-dir <out> [--diarizer speakerkit|clustering|sortformer]
       sharpy speakers <file> [--cluster-threshold F] [--speakers N]
                             --speakers is exact; automatic counting over-counts on
                             multi-speaker audio (bench/results/diarization_sweep.txt)
