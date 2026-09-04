@@ -21,10 +21,12 @@ let package = Package(
         .library(name: "SharpyEngine", targets: ["SharpyEngine"]),
         .library(name: "SharpyRender", targets: ["SharpyRender"]),
         .library(name: "SharpyPerception", targets: ["SharpyPerception"]),
+        .library(name: "SharpySemantics", targets: ["SharpySemantics"]),
         .library(name: "SharpyMCPCore", targets: ["SharpyMCPCore"]),
         .executable(name: "sharpy", targets: ["SharpyCLI"]),
         .executable(name: "sharpy-probe", targets: ["SharpyPerceptionProbe"]),
         .executable(name: "sharpy-mcp", targets: ["SharpyMCP"]),
+        .executable(name: "sharpy-scene", targets: ["SharpySceneCLI"]),
     ],
     dependencies: [
         // Local VLM/LLM inference (Qwen3-VL, Gemma 4 registered in VLMModelFactory). Pinned.
@@ -73,6 +75,32 @@ let package = Package(
                            .product(name: "SpeakerKit", package: "argmax-oss-swift"),
                            .product(name: "FluidAudio", package: "FluidAudio")],
             path: "Sources/SharpyPerception",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // The VLM scene pass. SEPARATE TARGET because linking MLX produces a binary that plain
+        // `swift build` cannot make work — verified: it dies at runtime with "Failed to load the
+        // default metallib", while xcodebuild's binary runs. Keeping MLX out of SharpyPerception
+        // is what lets `swift test` cover the perception layer at all.
+        .target(
+            name: "SharpySemantics",
+            dependencies: ["SharpyEngine", "SharpyPerception",
+                           // MLX itself arrives transitively through MLXVLM, exactly as in
+                           // sharpy-probe; naming it here is not a valid product reference.
+                           .product(name: "MLXVLM", package: "mlx-swift-lm"),
+                           .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                           .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                           // The #huggingFaceTokenizerLoader macro expands to code referencing
+                           // both of these by name, so they must be linked even though this file
+                           // imports neither directly.
+                           .product(name: "HuggingFace", package: "swift-huggingface"),
+                           .product(name: "Tokenizers", package: "swift-transformers")],
+            path: "Sources/SharpySemantics",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .executableTarget(
+            name: "SharpySceneCLI",
+            dependencies: ["SharpyEngine", "SharpyPerception", "SharpySemantics"],
+            path: "Sources/SharpySceneCLI",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         // The agent surface. Tools live in a library so they can be tested without a process;

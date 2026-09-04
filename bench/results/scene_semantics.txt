@@ -1,0 +1,65 @@
+VLM scene pass — shot size, activity, setting
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+What it is for
+--------------
+Apple Vision is measured better than every local VLM tested at faces (22/22), hands (21/21) and
+on-screen text (89/90 lines), at 0.63 s/frame against 2.3-5.0 s/frame, with no model files. So the
+VLM is asked ONLY what Vision cannot answer: what kind of shot this is, what is happening, where.
+Every field the model is asked for is one it is the best available source of. The earlier prompt
+(bench/bench_vlm_quality.py) asked it for faces and text too — that was how the models were
+measured against each other, and it would be a waste to keep asking in production.
+
+Measured on the user's reel (reel-12-NOSFX.mp4, 88 s, 1080x1920), Gemma 4 E2B-it-4bit,
+one frame every 8 s:
+
+    vision : 12 frames in 7.6 s   (0.63 s/frame)
+    scene  : 12 observations in 25.8 s  (2.2 s/frame)
+    corroborated by Vision 92%   contradicted 0   abstained 8%
+
+2.2 s/frame matches the 2.3 s/frame measured for this model in Python and 2.4 s in Swift, so the
+indexer adds no overhead of its own.
+
+A claim that cannot outrank a measurement
+-----------------------------------------
+Every scene answer is `Basis.structuralInference` — rank 7, the bottom of the hierarchy, below
+every measured fact. A contradicted claim supplies NO basis at all, so it cannot reach a render:
+that is enforced by `SceneObservation.basis(evidence:)` returning nil, and pinned by test.
+
+The cross-check is LOGICAL, not statistical. Only contradictions that hold at any threshold on any
+footage are used:
+    claims "card" (no person)  + Vision found a face   -> contradicted
+    claims "closeUp"           + Vision found no face  -> contradicted
+    claims "split"             + Vision found no face  -> contradicted
+    claims "wide" / "other"                            -> unchecked, always
+
+The rejected alternative was deriving shot-size thresholds from face-box geometry. The labelled
+set contains exactly 2 split-layout frames; a rule fitted to 2 examples is a rule fitted to a
+fixture, and this session has already produced three wrong verdicts that way.
+
+The hole in that design, and what closes it
+-------------------------------------------
+`other` and `wide` assert nothing Vision can refute, so a model answering `other` on every frame
+would post ZERO contradictions and look flawless. Abstention is the right answer on a genuinely
+ambiguous frame — the reel has one at 40.0 s that is a near-blank cream card, where the model
+answered "other / empty frame / blank" and was correct, confirmed by eye and by Vision's person
+run ending exactly there — but a high rate means the model is not doing the job.
+
+So the abstention rate is reported alongside corroboration, and `SceneIndexer` REFUSES an index
+above 50% abstention rather than caching one that looks perfect by declining to answer. The
+measured rate on the reel is 8%, from that one genuinely blank frame.
+
+Unparseable JSON is capped the same way at 25%: Qwen3-VL-2B failed 5 of 22 frames in measurement,
+a format fault rather than a perception one, but an index built by a model that cannot hold its
+output format is not worth caching.
+
+Build note, stated because it is a constraint and not a preference
+------------------------------------------------------------------
+SharpySemantics is a separate target because anything linking MLX must be built with xcodebuild.
+Verified both directions this session: `swift build`'s binary dies at runtime with "MLX error:
+Failed to load the default metallib", while the xcodebuild binary loads Gemma 4 E2B and answers.
+Keeping MLX out of SharpyPerception is what lets `swift test` cover the perception layer at all.
+
+    xcodebuild -scheme sharpy-scene -destination 'platform=macOS' -configuration Release \
+      -skipPackagePluginValidation -skipMacroValidation build
+    sharpy-scene <video> <model-dir> [--every 8]
