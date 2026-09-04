@@ -265,8 +265,18 @@ looks good.
 | **SpeakerKit, default** — AMI | **7.66 %** | **20.17 %** | 4 / 6 | 472× RT |
 | sherpa-onnx TitaNet @1.10 — AMI | 14.92 % | 24.02 % | 0 / 6 | 19× RT |
 | sherpa-onnx eres2net @0.5 — AMI | 68.25 % | 77.05 % | 0 / 6 | 16× RT |
+| FluidAudio clustering — VoxConverse | 20.61 % | 24.49 % | 69 / 205 | 136× RT |
+| FluidAudio Sortformer — VoxConverse | 28.37 % | 30.31 % | 91 / 216 | 347× RT |
+| FluidAudio Sortformer — AMI | 51.49 % | 53.95 % | *6 / 6* | 347× RT |
 
-That last row is the interesting one. `@0.5` is the exact configuration this repo previously
+**The italic 6/6 is a trap, not a result.** Sortformer scored perfect speaker counting on AMI —
+better than everything else here — because `numSpeakers` is `public let numSpeakers: Int = 4`, a
+compile-time constant, and every AMI meeting has exactly four speakers. It wasn't counting; it was
+returning 4. VoxConverse, with 1–20 speakers, settles it: it under-counts on 111 of 216 files, by
+as much as −16. What caught it was that 100 % counting sat beside 51 % DER, and both cannot be
+true of a working diarizer.
+
+The sherpa `@0.5` row is the same disease. `@0.5` is the exact configuration this repo previously
 recorded as the *proven baseline*, on the strength of finding "2 of 2 speakers" in 200 seconds of
 spliced `say` output. On six four-person meetings it reports **64, 86, 104, 116, 159 and 180
 speakers.** The baseline was never proven; the fixture was just easy. sherpa was then given every
