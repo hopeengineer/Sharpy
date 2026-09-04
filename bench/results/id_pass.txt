@@ -1,0 +1,56 @@
+Cryptomatte-style ID + coverage pass — cost and correctness
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+Why
+---
+Spatial assertions used to SAMPLE: a few frames per second, and hope. A wipe edge crossing a face
+for four frames is invisible to a 6 fps sampler and obvious to a viewer. The plan's answer (§6.1)
+is to make the renderer instrument itself, so "the edge must never cross the subject" becomes an
+intersection test at every frame rather than an inference between samples.
+
+What it emits
+-------------
+An rg32Uint texture alongside the composite, written in the SAME dispatch:
+    .r  present : bit i set if layer i landed in this pixel with any opacity at all
+    .g  owner   : the topmost layer still visible here after everything above it composited
+Cryptomatte's idea, adapted to a bounded layer count — with at most 8 layers, presence fits in a
+bitmask and neither hashing nor ranked-pair storage is needed.
+
+Cost: NONE, measured
+--------------------
+4 x 4K ProRes, 300 frames, same asset, same run:
+
+    no colour management        86.4 fps      ->  87.0 fps with the ID pass
+    OCIO ACEScg -> sRGB display   (83.4 fps recorded)  79.4 fps with the ID pass
+    M0 gate (>= 30 fps at 4 layers): MET in every configuration
+
+The difference at 4 layers with no colour is inside run-to-run noise, and the reason is already in
+the record: this pipeline is DECODE-bound, not shader-bound. Two extra uint writes per pixel do not
+touch the bottleneck. Verification that costs nothing is verification that stays switched on, and
+a verification nobody runs verifies nothing.
+
+The ordinary path pays literally nothing: `kEmitIDs` is a Metal function constant, so the ID lines
+are compiled out of the non-ID pipeline rather than branched over. Both variants must be
+specialised explicitly — a function with an unresolved constant cannot build a pipeline state at
+all, which is an abort at first use rather than a compile error.
+
+Correctness, tested against geometry known by construction
+----------------------------------------------------------
+  · a half-width layer owns exactly the half it was placed on, to the pixel, and its bounding box
+    is exactly its placement rect
+  · EDGE CROSSING is distinguished from FULL COVER — the distinction the feature exists for. A
+    layer fully over a face is a deliberate cutaway; a layer over 40% of it is an edge across
+    someone's mouth. Coverage alone cannot tell those apart; `edgeCrosses` can.
+  · a 20%-opacity layer is PRESENT everywhere it is drawn but does not OWN pixels a viewer would
+    read as the background's
+  · a layer that does not fill the frame leaves counted holes rather than silent black
+
+The honest limit, restated
+--------------------------
+This side of the test is EXACT: it is what the compositor did, not an estimate of it. The other
+side — the subject box — comes from Apple Vision and is probabilistic. So a failure means "the
+edge crossed the box", and whether the box was right is a separate, measured question (Vision:
+22/22 faces on the labelled reel). The failure mode moves from "we never looked" to "the subject
+track was wrong", which is attributable and measurable.
+
+Reproduce: sharpy bench --asset <4k> --layers 4 --color ACEScg --ids

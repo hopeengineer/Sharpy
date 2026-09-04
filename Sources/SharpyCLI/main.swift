@@ -221,6 +221,9 @@ case "bench":
         let url = URL(fileURLWithPath: assetPath)
         let display = option("--display") ?? "sRGB - Display"
 
+        // The ID pass is a verification feature; if it halves throughput nobody will leave it on,
+        // and a verification nobody runs verifies nothing. So its cost is measured, not assumed.
+        let withIDs = argv.contains("--ids")
         var pipelines: [(String, ColorPipeline)] = [("no colour management", .passthrough)]
         if let srcSpace = option("--color") {
             let p = try ColorPipeline(from: srcSpace, to: display)
@@ -235,6 +238,7 @@ case "bench":
                 let sources = try (0..<n).map { _ in try SequentialFrameSource(url: url) }
                 let w = sources[0].width, h = sources[0].height
                 let out = comp.makeOutputTexture(width: w, height: h)
+                let ids = withIDs ? comp.makeIDTexture(width: w, height: h) : nil
                 var placements: [LayerPlacement] = []
                 for i in 0..<n {
                     placements.append(i == 0 ? .full : LayerPlacement(offset: SIMD2(Float(i) * 300, Float(i) * 150), scale: 0.5, opacity: 0.8))
@@ -250,14 +254,14 @@ case "bench":
                         layers.append(CompositeLayer(pixelBuffer: f.pixelBuffer, placement: placements[i]))
                     }
                     if layers.count < n { break }
-                    let cb = try comp.encode(layers: layers, into: out)
+                    let cb = try comp.encode(layers: layers, into: out, ids: ids)
                     cb.commit(); cb.waitUntilCompleted()
                     rendered += 1; frame += 1
                 }
                 let dt = Date().timeIntervalSince(t0)
                 let fps = Double(rendered) / dt
                 let gate = n == 4 ? (fps >= 30 ? "  ✓ GATE (>= 30 fps)" : "  ✗ GATE (< 30 fps)") : ""
-                print(String(format: "  %d layer(s) @ %dx%d: %4d frames in %5.1f s = %6.1f fps%@", n, w, h, rendered, dt, fps, gate))
+                print(String(format: "  %d layer(s) @ %dx%d: %4d frames in %5.1f s = %6.1f fps%@%@", n, w, h, rendered, dt, fps, withIDs ? "  [+ID pass]" : "", gate))
             }
         }
     } catch { fail("bench: \(error)") }
@@ -685,6 +689,7 @@ default:
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
+      sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
       sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
       sharpy diarize-batch <dir> --rttm-dir <out> [--diarizer speakerkit|clustering|sortformer]
       sharpy speakers <file> [--cluster-threshold F] [--speakers N]
