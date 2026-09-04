@@ -636,6 +636,7 @@ RTTMs, scored with `pyannote.metrics` in both conventions.
 |---|---|---|---|---|
 | **SpeakerKit, default** — VoxConverse | **3.67 %** | **8.98 %** | 127 / 216 | 377× RT |
 | **SpeakerKit, default** — AMI | **7.66 %** | **20.17 %** | 4 / 6 | 472× RT |
+| sherpa-onnx TitaNet @1.10 — VoxConverse | 12.32 % | 15.67 % | 56 / 216 | 15× RT |
 | sherpa-onnx TitaNet @1.10 — AMI | 14.92 % | 24.02 % | 0 / 6 | 19× RT |
 | sherpa-onnx eres2net @1.10 — AMI | 13.50 % | 23.13 % | 0 / 6 | 16× RT |
 | sherpa-onnx eres2net @0.5 — AMI | 68.25 % | 77.05 % | 0 / 6 | 16× RT |

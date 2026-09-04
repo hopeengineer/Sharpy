@@ -59,9 +59,15 @@ It does not survive the other five. Tuned on one meeting, evaluated on six:
 
   VoxConverse dev, 216 files, 20.30 h         DER(collar)  DER(full)  count exact  speed
     SpeakerKit           (DEFAULT, untuned)       3.67%       8.98%    127 / 216    377x RT
-    sherpa TitaNet       @ 1.10                    (running)
+    sherpa TitaNet       @ 1.10                   12.32%      15.67%     56 / 216     15x RT
 
 SpeakerKit wins untuned against a tuned opponent, on both corpora, at 20-30x the speed.
+
+On the full 20.30 h corpus the margin is 3.4x on DER (3.67% vs 12.32%) and 2.3x on counting
+(58.8% vs 25.9%), with sherpa under-counting 111 files and over-counting 49 — it is wrong in both
+directions, which is worse than a bias because there is no correction to apply. AMI had already
+decided this on 2.37 h; the larger corpus did not change the answer, which is the outcome you want
+from a held-out run and is worth recording precisely because it is unexciting.
 
 The tuning trap, stated plainly
 -------------------------------
