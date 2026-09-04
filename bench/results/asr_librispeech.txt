@@ -1,0 +1,60 @@
+ASR on real speech — LibriSpeech test-clean and test-other
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+Why this exists
+---------------
+Every ASR number in this repo came from 528 words of `say` output and one 88 s reel. That is the
+same fixture mistake that produced three wrong verdicts in diarization, sitting unexamined in the
+ASR path — and it was already distorting a decision. The "0.19 WER points" separating MLX parakeet
+(0.57%) from the CoreML build (0.76%) is, on 528 words, EXACTLY ONE WORD:
+
+    0.57% x 528 = 3.01 errors
+    0.76% x 528 = 4.01 errors
+
+A 5.53 GB runtime was nearly built to recover one word of synthetic speech.
+
+Corpora: LibriSpeech test-clean (2620 utterances, 53 029 words) and test-other (2939 utterances,
+52 884 words) — 105 913 reference words, 200x the previous evidence. Scored with Whisper's
+EnglishTextNormalizer, so the number measures mis-hearing rather than formatting convention;
+missing and empty hypotheses count as full loss rather than being skipped.
+
+                     test-clean          test-other         overall        speed    failures
+    Parakeet TDT v3     2.29%               3.85%            3.06%       92-99x RT      1
+    WhisperKit          2.02%               4.29%            3.15%        7-8x RT      10
+    (both CoreML, in-process, no Python)
+
+THE ENGINES SWAP, AND THAT IS THE RESULT
+-----------------------------------------
+WhisperKit is better on clean read speech by 0.27 points. Parakeet is better on the noisy and
+accented split by 0.44 points. Neither dominates, and overall they are within 0.09 points of each
+other on 105 913 words.
+
+This is the strongest evidence yet for the plan's two-engine vote, and it is evidence of a kind
+the reel could not provide. Two engines are a quality gate because their errors are UNCORRELATED,
+not because there are two of them. An engine that merely lost everywhere would add nothing but
+cost; two engines whose ranking INVERTS with recording conditions disagree precisely where the
+material is hard, which is exactly where a transcript needs a confidence signal.
+
+It also retires the last argument for Apple as the second vote: Apple measured 5.30% on the
+synthetic set where these two measured 0.76%, and it makes the same meaning-inverting error
+WhisperKit makes ("did" for "didn't"). A second engine must fail differently, not merely exist.
+
+Cost
+----
+Parakeet is 12x faster (92-99x realtime against 7-8x) and 0.14 GB against ~1.6 GB. It also failed
+on 1 utterance of 5559 against WhisperKit's 10. WhisperKit remains the primary because it supplies
+per-word probabilities and verbatim disfluencies; Parakeet is the independent second opinion. On
+these numbers the pairing costs about 8x realtime, dominated entirely by WhisperKit.
+
+What this does NOT settle
+-------------------------
+LibriSpeech is read audiobook speech. It is real, unscripted in the sense that matters for
+acoustics, and 200x more evidence than a TTS splice — but it is not conversational video, and the
+absolute numbers will be worse on real rooms with real overlap. The RANKING and the SWAP are what
+transfer. Long-form corpora closer to this tool's material (TED-LIUM, Earnings-21) are the next
+measurement, not a substitute for this one.
+
+Reproduce:
+    curl -LO https://www.openslr.org/resources/12/test-clean.tar.gz && tar xzf test-clean.tar.gz
+    sharpy transcribe-batch LibriSpeech/test-clean --out hyp --engine parakeet
+    python bench/score_wer.py --ref LibriSpeech/test-clean --hyp hyp --name parakeet
