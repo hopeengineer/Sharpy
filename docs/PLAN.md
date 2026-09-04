@@ -730,8 +730,21 @@ Also recorded because it constrains the design: **AVAssetWriter always range-con
 full-range buffer becomes 236 in the file), so a superwhite deliverable cannot originate from
 Sharpy's own writer path.
 
-Still open in M3: tier 4 (VLM as proposer, compiling to deterministic assertions) and the human
-surface — feed, assist queue, cut diff, override timeline.
+**Tier 4 is built** — `CheckCompiler` turns a model's proposal into a deterministic measurement or
+discards it with a reason. Four names exist and each has a real measurement behind it; naming a
+verdict does not make one. `bench/results/text_contrast.txt`.
+
+**Two of the human surface's four pieces are built**, as data rather than UI, which is the order
+that matters for an agent-first tool:
+- *assist queue* → `review_queue` (see M4's selective review)
+- *cut diff* → `cut_diff`, which diffs two revisions in SOURCE time. Timeline time is the wrong
+  frame of reference: cutting near the top shifts every later timecode, so a timeline diff reports
+  the whole piece as changed when one cut moved. It also reports what HAPPENED rather than what the
+  data structure did — a ripple delete splits one clip into two without changing a frame of what
+  survives, and a clip-by-clip diff would call that "one removed, two added" and bury the two
+  seconds that actually went.
+
+Still open in M3: the feed and the override timeline, both of which are genuinely UI.
 
 ### M4 — autonomy instruments
 - Regression gate against own catalogue; selective review; compile-rate residue report;

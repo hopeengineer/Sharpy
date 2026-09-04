@@ -213,6 +213,13 @@ public let tools: [[String: Any]] = [
                         "required": []],
     ],
     [
+        "name": "cut_diff",
+        "description": "What actually changed, in the source material's own timecodes. Diffs the current edit against an earlier revision — 'removed 2.00 s (100.00–102.00 s of source)' rather than a list of commands. Source time is used because cutting near the top shifts every later timecode, so a timeline diff reports the whole piece as changed when one cut moved. Changes are ordered largest first. Use it to show a person what you did before asking them to approve it.",
+        "inputSchema": ["type": "object",
+                        "properties": ["stepsBack": ["type": "number", "description": "How many revisions back to compare against. Default 1, the previous state."]],
+                        "required": []],
+    ],
+    [
         "name": "review_queue",
         "description": "Where a person should look, ranked. Runs the assertions and turns their failures into a short list of moments with a reason each — blockers first, then holds, then advisories, with neighbouring findings merged into one place to look. If more than a fifth of the piece ends up flagged it says the queue is NOT selective and to watch the whole thing, because an eleven-minute selective review of a twelve-minute video is a full review with extra steps. Use this instead of asking someone to watch the piece.",
         "inputSchema": ["type": "object",
@@ -622,6 +629,18 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 else { lines.append("autonomy: no completed videos recorded yet — the cross-video trend starts once one is") }
             }
             return toolResult(lines.joined(separator: "\n"))
+
+        case "cut_diff":
+            let current = try session.requireDocument()
+            let steps = args?["stepsBack"]?.intValue ?? 1
+            guard steps > 0 else { return toolResult("stepsBack must be at least 1", isError: true) }
+            guard let log = session.log else { return toolResult("no edit log", isError: true) }
+            let index = log.commands.count - steps
+            guard index >= 0 else {
+                return toolResult("only \(log.commands.count) command(s) in the log; cannot go \(steps) back", isError: true)
+            }
+            let earlier = try log.state(after: index)
+            return toolResult(earlier.diff(to: current).summary)
 
         case "review_queue":
             let doc = try session.requireDocument()
