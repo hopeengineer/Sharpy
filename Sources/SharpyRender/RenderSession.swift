@@ -19,8 +19,15 @@ public struct ResolvedLayer: Sendable {
 
 extension Document {
     /// For each video track (bottom first), the clip covering `t` and the source instant it maps to.
+    /// Video layers at an instant, BOTTOM FIRST — the order the compositor blends them.
+    ///
+    /// A higher track index renders ON TOP, which is the convention in Premiere, Resolve and Final
+    /// Cut, and this project's stated bar is those tools' output. It previously reversed the
+    /// tracks, putting V1 above V2; nothing documented that and no test pinned it, so an editor
+    /// stacking a lower third on V2 would have watched it disappear behind the picture. Pinned now
+    /// by `testHigherTracksRenderOnTop`.
     public func resolveVideo(at t: TimeValue) -> [ResolvedLayer] {
-        timeline.tracks.enumerated().reversed().compactMap { (i, track) in
+        timeline.tracks.enumerated().compactMap { (i, track) in
             guard track.kind == .video, let clip = track.clips.first(where: { $0.range.contains(t) }) else { return nil }
             return ResolvedLayer(trackIndex: i, clip: clip, sourceTime: clip.source.start + (t - clip.start))
         }
@@ -44,14 +51,17 @@ public struct RenderOptions: Sendable {
     /// which exists for tests and for deliberately rendering something known to be broken.
     public var verifier: Verifier?
     public var skipVerification: Bool
+    /// Spatial checks against the compositor's own ID pass, evaluated on EVERY rendered frame.
+    /// `nil` renders without emitting identity, which is the cheaper path but also the blind one.
+    public var spatialGuard: SpatialGuard?
     public init(width: Int, height: Int, codec: RenderCodec = .proRes422HQ, range: TimeRange? = nil,
                 sampleRate: Int = 48_000, channels: Int = 2, includeAudio: Bool = true,
                 loudnessTarget: LoudnessTarget? = nil, verifier: Verifier? = nil,
-                skipVerification: Bool = false) {
+                skipVerification: Bool = false, spatialGuard: SpatialGuard? = nil) {
         self.width = width; self.height = height; self.codec = codec; self.range = range
         self.sampleRate = sampleRate; self.channels = channels; self.includeAudio = includeAudio
         self.loudnessTarget = loudnessTarget; self.verifier = verifier
-        self.skipVerification = skipVerification
+        self.skipVerification = skipVerification; self.spatialGuard = spatialGuard
     }
 }
 
@@ -66,6 +76,10 @@ public struct RenderReport: Sendable {
     public let loudnessGainApplied: Double?
     /// Set when the ceiling prevented reaching the target — the deliverable is quieter on purpose.
     public let loudnessTargetMissedBy: Double?
+    /// What the per-frame spatial tier found. Empty `findings` with a non-zero `framesChecked`
+    /// means it ran and was clean; `framesChecked == 0` means it did not run at all, and those are
+    /// different claims.
+    public let spatial: SpatialReport
     public var fps: Double { wallSeconds > 0 ? Double(framesRendered) / wallSeconds : 0 }
 }
 
@@ -89,6 +103,11 @@ public final class RenderSession {
     public let document: Document
     public let options: RenderOptions
     private let compositor: MetalCompositor
+    /// Reused across frames: allocating a 4K identity texture per frame would cost more than the
+    /// pass itself.
+    private var idTexture: MTLTexture?
+    private var spatialFindings: [SpatialFinding] = []
+    private var spatialFramesChecked = 0
     private var sources: [NodeID: SequentialFrameSource] = [:]
     private var audioSources: [NodeID: AudioSource] = [:]
 
@@ -111,6 +130,19 @@ public final class RenderSession {
         let a = try AudioSource(url: URL(fileURLWithPath: asset.path), sampleRate: options.sampleRate, channels: options.channels)
         audioSources[id] = a
         return a
+    }
+
+    /// Resolve a document placement against this render's output size. Aspect is preserved: the
+    /// placement states a width, and height follows from the source, because a placement that
+    /// stretched faces would be a silent quality fault.
+    private func place(_ p: ClipPlacement, srcWidth: Int, srcHeight: Int) -> LayerPlacement {
+        let outW = Float(options.width), outH = Float(options.height)
+        let targetW = Float(p.width.doubleValue) * outW
+        let scale = targetW / Float(srcWidth)
+        return LayerPlacement(offset: SIMD2(Float(p.x.doubleValue) * outW,
+                                            Float(p.y.doubleValue) * outH),
+                              scale: scale,
+                              opacity: Float(p.opacity.doubleValue))
     }
 
     /// Placement that fits a source frame into the output while preserving aspect (letterbox/pillarbox).
@@ -152,7 +184,12 @@ public final class RenderSession {
             guard let frame = try src.frame(at: rl.sourceTime) else {
                 throw RenderError.noFrame(asset: src.url.lastPathComponent, at: rl.sourceTime)
             }
-            return CompositeLayer(pixelBuffer: frame.pixelBuffer, placement: fit(src.width, src.height))
+            // A clip with no placement fits the frame, as it always has. One with a placement is
+            // positioned in output fractions, so the same document delivers correctly at 1080p and
+            // 4K without re-authoring.
+            let placement = rl.clip.placement.map { place($0, srcWidth: src.width, srcHeight: src.height) }
+                ?? fit(src.width, src.height)
+            return CompositeLayer(pixelBuffer: frame.pixelBuffer, placement: placement)
         }
         guard let pool = adaptor.pixelBufferPool else { throw RenderError.poolFailed }
         var out: CVPixelBuffer?
@@ -160,10 +197,20 @@ public final class RenderSession {
         guard let out else { throw RenderError.poolFailed }
         ColorTag.tag709(out)
         let (tex, keepAlive) = try compositor.outputTexture(for: out)
-        let cb = try compositor.encode(layers: layers, into: tex)
+        if options.spatialGuard != nil, idTexture == nil {
+            idTexture = compositor.makeIDTexture(width: tex.width, height: tex.height)
+        }
+        let cb = try compositor.encode(layers: layers, into: tex, ids: idTexture)
         cb.addCompletedHandler { _ in _ = keepAlive }
         cb.commit()
         cb.waitUntilCompleted()   // the encoder must see finished pixels; overlap comes with the playback engine
+        // Read identity only after the buffer completes: reading in flight would assert against
+        // whatever the texture held last, which is a check that passes for the wrong reason.
+        if let guardian = options.spatialGuard, let idTexture {
+            spatialFramesChecked += 1
+            spatialFindings += guardian.check(IDPass(texture: idTexture), frame: f, time: t,
+                                              layerCount: layers.count)
+        }
         let pts = try (t - rangeStart).cmTime()
         guard adaptor.append(out, withPresentationTime: pts) else {
             throw RenderError.writerFailed(writer.error?.localizedDescription ?? "video append at frame \(f)")
@@ -354,6 +401,8 @@ public final class RenderSession {
                             duration: TimeValue(frames: Int64(progress.framesWritten), at: rate),
                             wallSeconds: Date().timeIntervalSince(t0),
                             loudnessBefore: loudnessBefore, loudnessGainApplied: appliedGain,
-                            loudnessTargetMissedBy: missedBy)
+                            loudnessTargetMissedBy: missedBy,
+                            spatial: SpatialReport(framesChecked: spatialFramesChecked,
+                                                   findings: spatialFindings))
     }
 }

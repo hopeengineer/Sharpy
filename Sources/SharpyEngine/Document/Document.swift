@@ -54,15 +54,53 @@ public struct AssetRef: Hashable, Sendable, Codable {
     }
 }
 
+/// Where a clip sits in the frame, as fractions of the output — so a placement survives a change
+/// of delivery resolution, which pixel offsets would not.
+///
+/// Exact rationals rather than floats, for the same reason time is: a placement that a document
+/// round-trips must come back identical, and repeated float arithmetic on a scale drifts. The
+/// conversion to Float happens once, at the compositor boundary.
+public struct ClipPlacement: Hashable, Sendable, Codable {
+    /// Top-left of the clip as a fraction of output width/height. (0,0) is the frame's corner.
+    public let x: Rational
+    public let y: Rational
+    /// Fraction of the output's width the clip spans. 1 = full width.
+    public let width: Rational
+    /// 0…1 straight alpha, composited "over".
+    public let opacity: Rational
+
+    public init(x: Rational, y: Rational, width: Rational, opacity: Rational = .one) {
+        self.x = x; self.y = y; self.width = width; self.opacity = opacity
+    }
+
+    /// Fill the frame — what a clip with no placement does.
+    public static let full = ClipPlacement(x: .zero, y: .zero, width: .one)
+
+    /// A corner inset, the common picture-in-picture case.
+    public static func inset(width: Rational, margin: Rational) -> ClipPlacement {
+        ClipPlacement(x: .one - width - margin, y: margin, width: width)
+    }
+}
+
 public struct Clip: Hashable, Sendable, Codable {
     public let asset: NodeID
     /// Range within the source asset.
     public let source: TimeRange
     /// Position on the track. `duration` equals source.duration unless retimed.
     public let start: TimeValue
+    /// Where it sits in the frame. `nil` means fit the whole frame, which is what every clip did
+    /// before placement existed and remains the default so old documents decode unchanged.
+    public let placement: ClipPlacement?
     public var end: TimeValue { start + source.duration }
     public var range: TimeRange { TimeRange(start: start, end: end) }
-    public init(asset: NodeID, source: TimeRange, start: TimeValue) { self.asset = asset; self.source = source; self.start = start }
+    public init(asset: NodeID, source: TimeRange, start: TimeValue, placement: ClipPlacement? = nil) {
+        self.asset = asset; self.source = source; self.start = start; self.placement = placement
+    }
+
+    /// The same clip somewhere else in the frame.
+    public func placed(_ placement: ClipPlacement?) -> Clip {
+        Clip(asset: asset, source: source, start: start, placement: placement)
+    }
 }
 
 public enum TrackKind: String, Sendable, Codable { case video, audio }
@@ -266,12 +304,18 @@ public enum Command: Sendable, Codable, Equatable {
     /// Remove [range) from a track and close the gap (ripple). Linked tracks are the caller's
     /// concern at this layer; the engine's sync lock lives one level up.
     case rippleDelete(track: Int, range: TimeRange, decision: Decision)
+    /// Move or resize a clip within the frame. Geometry in space rather than in time, but a
+    /// decision all the same — a picture-in-picture that covers a face is an edit, and an edit
+    /// without a basis does not render.
+    case placeInFrame(track: Int, clipIndex: Int, placement: ClipPlacement?, decision: Decision)
     /// Record a decision that changes no clip geometry (colour, sound cue, graphic).
     case recordDecision(Decision)
 }
 
 public enum ApplyError: Error, Equatable, CustomStringConvertible {
     case noSuchTrack(Int)
+    case noSuchClip(Int, Int)
+    case notAVideoTrack(Int)
     case noSuchAsset(NodeID)
     case overlap(existing: TimeRange, new: TimeRange)
     case sourceOutOfRange(asset: NodeID, source: TimeRange, duration: TimeValue)
@@ -283,6 +327,8 @@ public enum ApplyError: Error, Equatable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .noSuchTrack(let i): return "no track at index \(i)"
+        case .noSuchClip(let t, let c): return "no clip at index \(c) on track \(t)"
+        case .notAVideoTrack(let i): return "track \(i) is not a video track; placement is picture-only"
         case .noSuchAsset(let id): return "no asset \(id)"
         case .overlap(let e, let n): return "clip \(n) overlaps existing clip \(e)"
         case .sourceOutOfRange(let a, let s, let d): return "source range \(s) exceeds asset \(a) duration \(d)"
@@ -346,23 +392,38 @@ extension Document {
             for c in track.clips {
                 guard let cut = c.range.intersection(range) else {
                     // untouched; shift left if it starts after the removed range
-                    out.append(range.end < c.start || range.end == c.start ? Clip(asset: c.asset, source: c.source, start: c.start - range.duration) : c)
+                    // `placement: c.placement` on every reconstruction below is load-bearing: a
+                    // ripple delete must move a clip in TIME without silently resetting where it
+                    // sits in the FRAME.
+                    out.append(range.end < c.start || range.end == c.start ? Clip(asset: c.asset, source: c.source, start: c.start - range.duration, placement: c.placement) : c)
                     continue
                 }
                 // head piece before the cut
                 if c.start < cut.start {
                     let headDur = cut.start - c.start
-                    out.append(Clip(asset: c.asset, source: TimeRange(start: c.source.start, duration: headDur), start: c.start))
+                    out.append(Clip(asset: c.asset, source: TimeRange(start: c.source.start, duration: headDur), start: c.start, placement: c.placement))
                 }
                 // tail piece after the cut, rippled left
                 if cut.end < c.end {
                     let tailOffset = cut.end - c.start
                     let tailSourceStart = c.source.start + tailOffset
-                    out.append(Clip(asset: c.asset, source: TimeRange(start: tailSourceStart, end: c.source.end), start: cut.end - range.duration))
+                    out.append(Clip(asset: c.asset, source: TimeRange(start: tailSourceStart, end: c.source.end), start: cut.end - range.duration, placement: c.placement))
                 }
             }
             let d = replacing(track: trackIndex, with: Track(kind: track.kind, name: track.name, clips: out)).recording(decision)
             return (d.0, Delta(before: before, after: d.0.id, decision: d.1, shiftedTracks: [trackIndex]))
+
+        case .placeInFrame(let trackIndex, let clipIndex, let placement, let decision):
+            try check(decision)
+            guard timeline.tracks.indices.contains(trackIndex) else { throw ApplyError.noSuchTrack(trackIndex) }
+            let track = timeline.tracks[trackIndex]
+            guard track.clips.indices.contains(clipIndex) else { throw ApplyError.noSuchClip(trackIndex, clipIndex) }
+            guard track.kind == .video else { throw ApplyError.notAVideoTrack(trackIndex) }
+            var clips = track.clips
+            clips[clipIndex] = clips[clipIndex].placed(placement)
+            let d = replacing(track: trackIndex, with: Track(kind: track.kind, name: track.name, clips: clips))
+                .recording(decision)
+            return (d.0, Delta(before: before, after: d.0.id, decision: d.1, shiftedTracks: []))
 
         case .recordDecision(let decision):
             try check(decision)
