@@ -329,7 +329,55 @@ than a setting — across six meetings it collapses.
 
 Full comparison: [`bench/results/diarization_real_corpora.txt`](bench/results/diarization_real_corpora.txt).
 
-## Requirements## Requirements
+## Verification, in four tiers
+
+A render is gated by 16 assertions, and then by four tiers that check what was actually produced.
+
+1. **The renderer instruments itself.** The Metal compositor emits a Cryptomatte-style ID pass in
+   the same dispatch — per pixel, which layers are present and which one a viewer would say owns
+   it. It **costs nothing**: 86.4 → 87.0 fps at four 4K layers, because the pipeline is
+   decode-bound. Spatial assertions stop sampling at 6 fps and start proving, every frame. It
+   distinguishes *a layer covering a face* (a deliberate cutaway) from *its edge running through a
+   face* (a fault) — a distinction coverage alone cannot make.
+2. **Signal QC on the written file**, at 774 fps for 1080p and 165 fps for 4K — about 3× ffmpeg's
+   `signalstats` — measuring every frame rather than sampling.
+3. **Predicted versus achieved.** Frame count, levels and loudness against what the render
+   undertook to produce. A deliverable 6 LU quiet is perfectly legal and completely wrong.
+4. **The VLM proposes; the measurement decides.** A model can only cause a *measurement* to happen:
+   its proposal compiles into a deterministic check or is discarded with a reason. Naming a verdict
+   does not make one — `thisEditIsBad`, `approve` and `block` all fail to compile.
+
+**Four false positives were removed by running these against real files rather than fixtures**, and
+they are the most useful thing in this section:
+
+- *Repeated frames are not a fault.* The reel has 416 and every one is correct — a static graphic
+  card repeats frames because it is one.
+- *Legality is undecidable without a tag.* AVFoundation synthesises a video-range default, so an
+  unconditional check called 2088 of 2649 frames illegal — on footage that measures 0–255 and is
+  actually full range.
+- *Hard 16/235 limits fail correct renders.* Sharpy's own output lands at 15–237: right conversion,
+  ordinary rounding overshoot. The bound is now EBU R103's 5–246 tolerance.
+- *"Clean" must not mean "empty".* The spatial tier reported clean across 2649 frames of a
+  single-layer render, having examined none of them — one layer cannot cut through anything.
+
+## Getting better over time
+
+The point of the project is to need a person less. Four instruments measure whether that is
+happening, rather than assuming it:
+
+- **Autonomy trend** — questions per *hour of footage*, across videos, by least-squares slope. A
+  series that starts at 20, spends its middle in the high 30s and ends at 19 looks like progress at
+  the endpoints and is getting worse; that case is a test.
+- **Style profiles** — a note repeated three times is offered as a rule, in the person's verbatim
+  wording. Repeated and never promoted is reported as a **tooling failure** by name.
+- **Catalogue gate** — is this edit like the work they actually publish? Compared against *their*
+  median, not a general norm, with robust statistics so one experimental piece cannot redefine
+  normal.
+- **Selective review** — where to look, ranked and merged. Past a fifth of the piece it says the
+  queue is *not selective* and to watch the whole thing, because an eleven-minute selective review
+  of a twelve-minute video is a full review with extra steps.
+
+## Requirements
 
 - macOS 26 or later, Apple silicon
 - Xcode 26 toolchain (Swift 6.3)
