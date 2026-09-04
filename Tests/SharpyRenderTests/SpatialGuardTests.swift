@@ -90,7 +90,7 @@ final class SpatialGuardTests: XCTestCase {
         let report = try render(doc, guardian: SpatialGuard(source: FixedRegions(regions: [face])))
         XCTAssertTrue(report.spatial.isClean)
         XCTAssertEqual(report.spatial.framesChecked, Int(Self.frames))
-        XCTAssertTrue(report.spatial.summary.contains("clean"))
+        XCTAssertTrue(report.spatial.summary.contains("clean"), report.spatial.summary)
     }
 
     /// "Did not run" and "ran and found nothing" are different claims and must read differently.
@@ -145,5 +145,31 @@ final class SpatialGuardTests: XCTestCase {
                        "bottom first: V1 then V2, so V2 composites over V1")
         XCTAssertNil(layers.first?.clip.placement, "V1 is the full-frame base")
         XCTAssertNotNil(layers.last?.clip.placement, "V2 is the placed overlay, and it is on top")
+    }
+
+    /// "Clean" must never mean "there was nothing to look at". A single-layer render cannot
+    /// produce a finding, and measured on the user's reel it reported "clean across 2649 frames"
+    /// having examined none of them.
+    func testASingleLayerRenderReportsNothingToCheck() throws {
+        var log = CommandLog(initial: Document(timeline: Timeline(name: "t", frameRate: Self.rate)))
+        let asset = AssetRef(contentHash: "synth", path: Self.clipURL.path,
+                             duration: TimeValue(frames: Self.frames, at: Self.rate),
+                             frameRate: Self.rate, hasVideo: true, hasAudio: false)
+        try log.append(.addAsset(asset))
+        try log.append(.addTrack(kind: .video, name: "V1"))
+        let id = log.head.assets.keys.first!
+        func t(_ f: Int64) -> TimeValue { TimeValue(frames: f, at: Self.rate) }
+        let basis = Basis.measuredMaterial(ref: "test", detail: "synthetic", confidence: .one)
+        try log.append(.placeClip(track: 0,
+                                  clip: Clip(asset: id, source: TimeRange(start: t(0), end: t(Self.frames)), start: t(0)),
+                                  decision: Decision(kind: .cut, at: t(0), basis: basis)))
+        let face = ProtectedRegion(name: "face", rect: PixelRect(x: 260, y: 100, width: 120, height: 120))
+        let report = try render(log.head, guardian: SpatialGuard(source: FixedRegions(regions: [face])))
+
+        XCTAssertEqual(report.spatial.framesChecked, 0, "one layer cannot cut through anything")
+        XCTAssertEqual(report.spatial.framesNotCheckable, Int(Self.frames))
+        XCTAssertTrue(report.spatial.summary.contains("nothing to check"), report.spatial.summary)
+        XCTAssertFalse(report.spatial.summary.contains("clean"),
+                       "an empty check must not read as a pass")
     }
 }

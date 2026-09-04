@@ -62,9 +62,17 @@ public struct SpatialGuard: Sendable {
         self.ignoresBaseLayer = ignoresBaseLayer
     }
 
-    public func check(_ pass: IDPass, frame: Int64, time: TimeValue, layerCount: Int) -> [SpatialFinding] {
+    /// Returns whether the frame was actually CHECKABLE as well as what was found.
+    ///
+    /// A frame with one layer, or with no subject boxes, cannot produce a finding — nothing can cut
+    /// through anything. Counting it as "checked and clean" is how a tier reports "clean across
+    /// 2649 frames" having examined none of them, which is the exact failure this file was written
+    /// to prevent. Measured on the user's reel: a single-layer render is 2649 uncheckable frames,
+    /// and it must say so.
+    public func check(_ pass: IDPass, frame: Int64, time: TimeValue,
+                      layerCount: Int) -> (checkable: Bool, findings: [SpatialFinding]) {
         let regions = source.protectedRegions(at: time)
-        guard !regions.isEmpty, layerCount > 1 else { return [] }
+        guard !regions.isEmpty, layerCount > 1 else { return (false, []) }
         var findings: [SpatialFinding] = []
         for layer in (ignoresBaseLayer ? 1 : 0)..<layerCount {
             for region in regions {
@@ -75,17 +83,22 @@ public struct SpatialGuard: Sendable {
                 }
             }
         }
-        return findings
+        return (true, findings)
     }
 }
 
 /// What the spatial tier found across a whole render.
 public struct SpatialReport: Sendable {
+    /// Frames that could actually produce a finding — more than one layer, and at least one
+    /// subject box. NOT the number of frames rendered.
     public let framesChecked: Int
+    /// Frames where there was nothing to check. Reported so "clean" cannot quietly mean "empty".
+    public let framesNotCheckable: Int
     public let findings: [SpatialFinding]
 
-    public init(framesChecked: Int, findings: [SpatialFinding]) {
+    public init(framesChecked: Int, framesNotCheckable: Int = 0, findings: [SpatialFinding]) {
         self.framesChecked = framesChecked
+        self.framesNotCheckable = framesNotCheckable
         self.findings = findings
     }
 
@@ -95,10 +108,16 @@ public struct SpatialReport: Sendable {
     public var affectedFrames: Int { Set(findings.map(\.frame)).count }
 
     public var summary: String {
+        let skipped = framesNotCheckable > 0
+            ? " (\(framesNotCheckable) frame(s) had nothing to check — single layer or no subject)" : ""
         guard !findings.isEmpty else {
-            return framesChecked == 0 ? "spatial: not run"
-                                      : "spatial: clean across \(framesChecked) frame(s)"
+            if framesChecked == 0 {
+                return framesNotCheckable > 0
+                    ? "spatial: nothing to check\(skipped)"
+                    : "spatial: not run"
+            }
+            return "spatial: clean across \(framesChecked) checkable frame(s)\(skipped)"
         }
-        return "spatial: \(findings.count) finding(s) on \(affectedFrames) of \(framesChecked) frame(s) — HOLD"
+        return "spatial: \(findings.count) finding(s) on \(affectedFrames) of \(framesChecked) checkable frame(s)\(skipped) — HOLD"
     }
 }

@@ -201,7 +201,22 @@ case "render":
             case nil: return nil
             }
         }()
-        let session = try RenderSession(document: log.head, options: RenderOptions(width: w, height: h, codec: codec, sampleRate: sampleRate, loudnessTarget: target))
+        // --guard-subjects turns on the spatial tier: Vision finds the faces and captions, and
+        // every rendered frame is checked against them using the compositor's own ID pass. Opt-in
+        // because it costs a Vision pass over the source; the ID pass itself is free.
+        var spatialGuard: SpatialGuard?
+        if argv.contains("--guard-subjects") {
+            if #available(macOS 26.0, *) {
+                let store = try IndexStore()
+                let vision = try store.vision(for: URL(fileURLWithPath: assetPath)).0
+                spatialGuard = SpatialGuard(source: VisionSubjectSource(
+                    index: vision, outputWidth: w, outputHeight: h))
+                print("spatial guard: \(vision.frames.count) Vision frame(s) supplying subject boxes")
+            } else {
+                fail("--guard-subjects needs macOS 26")
+            }
+        }
+        let session = try RenderSession(document: log.head, options: RenderOptions(width: w, height: h, codec: codec, sampleRate: sampleRate, loudnessTarget: target, spatialGuard: spatialGuard))
         let report = try session.render(to: URL(fileURLWithPath: outPath))
         if let before = report.loudnessBefore, let gain = report.loudnessGainApplied {
             print(String(format: "loudness:  %@ → applied %+.2f dB%@", before.description, gain,
@@ -209,6 +224,15 @@ case "render":
         }
         print(String(format: "rendered:  %d frames + %d audio samples in %.2f s = %.1f fps → %@",
                      report.framesRendered, report.audioSamplesWritten, report.wallSeconds, report.fps, outPath))
+        if report.spatial.framesChecked > 0 {
+            print("spatial:   " + report.spatial.summary)
+            // Show a few, and say how many were suppressed. A wall of findings for one bad wipe
+            // teaches nothing; a silent truncation hides the scale.
+            for finding in report.spatial.findings.prefix(8) { print("     · \(finding)") }
+            if report.spatial.findings.count > 8 {
+                print("     … \(report.spatial.findings.count - 8) more")
+            }
+        }
     } catch { fail("render: \(error)") }
 
 case "bench":
@@ -729,7 +753,7 @@ default:
       sharpy version
       sharpy tc <frame> [29.97DF|29.97|23.976|24|25|30|50|59.94DF|59.94|60]
       sharpy probe <file>
-      sharpy render --asset <file> --out <file.mov> [--rate R] [--size WxH] [--codec prores|h264|hevc]
+      sharpy render --asset <file> --out <file.mov> [--guard-subjects] [--rate R] [--size WxH] [--codec prores|h264|hevc]
                     [--cut a-b]... [--loudness broadcast|streaming|<LUFS>]
                     [--remove-fillers] [--remove-words 1,5,10-12] [--tighten-pauses <seconds>]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--frames N] [--color <space>] [--display <space>]

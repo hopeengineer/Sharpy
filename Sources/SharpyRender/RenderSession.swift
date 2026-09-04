@@ -108,6 +108,7 @@ public final class RenderSession {
     private var idTexture: MTLTexture?
     private var spatialFindings: [SpatialFinding] = []
     private var spatialFramesChecked = 0
+    private var spatialFramesNotCheckable = 0
     private var sources: [NodeID: SequentialFrameSource] = [:]
     private var audioSources: [NodeID: AudioSource] = [:]
 
@@ -207,9 +208,10 @@ public final class RenderSession {
         // Read identity only after the buffer completes: reading in flight would assert against
         // whatever the texture held last, which is a check that passes for the wrong reason.
         if let guardian = options.spatialGuard, let idTexture {
-            spatialFramesChecked += 1
-            spatialFindings += guardian.check(IDPass(texture: idTexture), frame: f, time: t,
-                                              layerCount: layers.count)
+            let outcome = guardian.check(IDPass(texture: idTexture), frame: f, time: t,
+                                         layerCount: layers.count)
+            if outcome.checkable { spatialFramesChecked += 1 } else { spatialFramesNotCheckable += 1 }
+            spatialFindings += outcome.findings
         }
         let pts = try (t - rangeStart).cmTime()
         guard adaptor.append(out, withPresentationTime: pts) else {
@@ -403,6 +405,7 @@ public final class RenderSession {
                             loudnessBefore: loudnessBefore, loudnessGainApplied: appliedGain,
                             loudnessTargetMissedBy: missedBy,
                             spatial: SpatialReport(framesChecked: spatialFramesChecked,
+                                                   framesNotCheckable: spatialFramesNotCheckable,
                                                    findings: spatialFindings))
     }
 }
