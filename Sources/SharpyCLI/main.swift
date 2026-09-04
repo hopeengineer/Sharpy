@@ -459,6 +459,81 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "transcribe-batch":
+    // sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
+    //
+    // Exists for the same reason diarize-batch does: a corpus number is only comparable if every
+    // engine sees the same files through the same harness, and if model load is paid once rather
+    // than once per file. Writes one .txt per input, named by stem, for an external scorer.
+    guard let dir = argv.dropFirst().first, let outDir = option("--out") else {
+        fail("usage: sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet")
+    }
+    do {
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+        // Recursive: LibriSpeech nests speaker/chapter directories, and flattening it by hand is
+        // one more place for the harness to differ between engines.
+        let root = URL(fileURLWithPath: dir)
+        var audio: [URL] = []
+        if let walker = fm.enumerator(at: root, includingPropertiesForKeys: nil) {
+            for case let f as URL in walker
+            where ["wav", "flac", "m4a", "mp3", "mp4"].contains(f.pathExtension.lowercased()) {
+                audio.append(f)
+            }
+        }
+        audio.sort { $0.path < $1.path }
+        guard !audio.isEmpty else { fail("no audio under \(dir)") }
+
+        let engine = option("--engine") ?? "whisper"
+        let sem = DispatchSemaphore(value: 0)
+        Task {
+            if #available(macOS 26.0, *) {
+                // Built once, outside the loop — otherwise the measurement is of model loading.
+                let whisper = WhisperIndexer(model: option("--model") ?? "large-v3-v20240930")
+                let parakeet = ParakeetIndexer()
+                let apple = SpeechIndexer()
+                var totalWall = 0.0, totalAudio = 0.0, failures = 0
+                for (i, url) in audio.enumerated() {
+                    let stem = url.deletingPathExtension().lastPathComponent
+                    let t0 = Date()
+                    do {
+                        let asset = NodeID(contentOf: url.path)
+                        let t: Transcript
+                        switch engine {
+                        case "whisper":  t = try await whisper.transcribe(url: url, asset: asset)
+                        case "parakeet": t = try await parakeet.transcribe(url: url, asset: asset)
+                        case "apple":    t = try await apple.transcribe(url: url, asset: asset)
+                        default: fail("unknown --engine \(engine)")
+                        }
+                        let dt = Date().timeIntervalSince(t0)
+                        let dur = (try? AudioSource(url: url).duration.seconds.doubleValue) ?? 0
+                        totalWall += dt; totalAudio += dur
+                        try t.text.write(toFile: (outDir as NSString).appendingPathComponent(stem + ".txt"),
+                                         atomically: true, encoding: .utf8)
+                    } catch {
+                        // An empty file, not a missing one: the scorer must see the failure as a
+                        // failure rather than silently scoring a smaller corpus.
+                        failures += 1
+                        try? "".write(toFile: (outDir as NSString).appendingPathComponent(stem + ".txt"),
+                                      atomically: true, encoding: .utf8)
+                        FileHandle.standardError.write("  FAILED \(stem): \(error)\n".data(using: .utf8)!)
+                    }
+                    if (i + 1) % 25 == 0 || i + 1 == audio.count {
+                        print(String(format: "[%d/%d] %.2f h audio in %.1f min (%.0f× RT), %d failed",
+                                     i + 1, audio.count, totalAudio / 3600, totalWall / 60,
+                                     totalAudio / max(totalWall, 0.001), failures))
+                        fflush(stdout)
+                    }
+                }
+                print(String(format: "\n%@: %d files, %.2f h audio in %.1f min = %.0f× realtime, %d failed",
+                             engine, audio.count, totalAudio / 3600, totalWall / 60,
+                             totalAudio / max(totalWall, 0.001), failures))
+            }
+            sem.signal()
+        }
+        sem.wait()
+    } catch { fail("transcribe-batch: \(error)") }
+
 case "diarize-batch":
     // sharpy diarize-batch <audio-dir> --rttm-dir <out> [--cluster-threshold F]
     //
@@ -610,6 +685,7 @@ default:
       sharpy verify --asset <file> [--loudness broadcast|streaming|<LUFS>]
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
+      sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
       sharpy diarize-batch <dir> --rttm-dir <out> [--diarizer speakerkit|clustering|sortformer]
       sharpy speakers <file> [--cluster-threshold F] [--speakers N]
                             --speakers is exact; automatic counting over-counts on
