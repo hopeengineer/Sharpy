@@ -1,0 +1,57 @@
+Text legibility — WCAG contrast on rendered frames, and tier 4's proposal compiler
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+The gap this closes
+-------------------
+Two legibility assertions already existed: text inside the title-safe area, and text on screen long
+enough to read. Neither asks the question a viewer asks, which is whether the text can be read at
+all. White text over a bright sky is inside the safe area, on screen for six seconds, and invisible.
+
+Method, and its stated approximation
+------------------------------------
+WCAG 2.1 relative luminance and the (L1 + 0.05) / (L2 + 0.05) ratio. WCAG is a web-text standard
+rather than a video one, so this is cited as a CRAFT RULE with its source rather than as a platform
+requirement — but its 4.5:1 and 3:1 thresholds are the only widely published measurable numbers for
+the question, and a real standard beats an invented threshold. The assertion WARNS; blocking a
+delivery on an approximation of a web standard would claim more confidence than the method carries.
+
+Text and background are separated by PERCENTILE (10th and 90th) inside each OCR box rather than by
+segmentation. Inside a tight text box the pixels are close to bimodal — glyph and ground — and
+unlike a mean, percentiles are not dragged around by antialiasing at glyph edges. The known
+weakness: for very thin glyphs or a loose box, fewer than 10% of pixels may be text, and the method
+then understates contrast by measuring background against background.
+
+Measured on the user's reel
+---------------------------
+    530 text lines in 6.6 s
+    219 below 3.0:1 (WCAG AA, large text)
+    worst 1.3:1 — "+6-" at 49.00 s
+
+VALIDATED BY EYE, not just by running. The frame at 6.00 s was extracted and inspected: the flagged
+"RESULT" at 2.6:1 is tiny grey label text on a light card and is genuinely hard to read, while the
+large white "-32.5 DB" over a dark navy shirt in the same frame is NOT flagged. The measurement
+agrees with what is visible, on both the positive and the negative.
+
+41% failing is high, and it is not an artefact: this reel carries a lot of small grey label text
+inside its graphic cards.
+
+Tier 4 — the VLM as proposer
+-----------------------------
+The specification forbids the agent from being the source of a claim, but a model is the best thing
+available for NOTICING — "that caption looks hard to read" is what a model is good at and a
+threshold is not.
+
+So a proposal can only cause a MEASUREMENT. `CheckCompiler` maps it to a deterministic check or
+rejects it with a reason. Four names exist and each has a measurement behind it: textContrast,
+textSafeArea, textDuration, subjectInFrame. Rejections are kept, because a model that keeps
+proposing something unmeasurable is describing a gap in the checks — which is a roadmap, not a
+fault, and is the "compile-rate residue report" M4 asks for.
+
+Pinned by test:
+  · naming a verdict does not make one — "thisEditIsBad", "approve" and "block" all fail to compile
+  · a proposal without a Vision pass is REJECTED, not silently passed
+  · a proposal about a moment with no text there is rejected, not a check that trivially passes
+  · a proposal more than a second from any observation is rejected as too far to stand for it
+  · the set of known kinds is asserted exactly, so a name cannot be added without a measurement
+
+Reproduce: sharpy contrast <file> [--min 3.0]

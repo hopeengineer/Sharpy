@@ -490,6 +490,33 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "contrast":
+    // sharpy contrast <file> [--min 3.0]
+    // Can the on-screen text actually be read? Safe-area and duration checks ask where text is and
+    // how long it stays; neither asks the question a viewer asks.
+    guard let path = argv.dropFirst().first else { fail("usage: sharpy contrast <file> [--min 3.0]") }
+    do {
+        guard #available(macOS 26.0, *) else { fail("contrast needs macOS 26") }
+        let url = URL(fileURLWithPath: path)
+        let store = try IndexStore()
+        let minimum = Double(option("--min") ?? "3.0") ?? 3.0
+        let t0 = Date()
+        let vision = try store.vision(for: url).0
+        let readings = try TextContrastMeter().measure(url: url, vision: vision)
+        let dt = Date().timeIntervalSince(t0)
+        print(String(format: "%d text line(s) measured in %.1f s", readings.count, dt))
+        guard !readings.isEmpty else { print("  no on-screen text found"); break }
+        let failing = readings.filter { $0.ratio < minimum }
+        let worst = readings.min { $0.ratio < $1.ratio }
+        print(String(format: "  %d below %.1f:1 (WCAG AA, large text)", failing.count, minimum))
+        if let worst { print(String(format: "  worst: %.1f:1  \"%@\" at %.2f s",
+                                    worst.ratio, worst.text, worst.time.seconds.doubleValue)) }
+        for r in failing.prefix(10) {
+            print(String(format: "     %5.1f:1  %7.2f s  \"%@\"", r.ratio, r.time.seconds.doubleValue, r.text))
+        }
+        if failing.count > 10 { print("     … \(failing.count - 10) more") }
+    } catch { fail("contrast: \(error)") }
+
 case "qc":
     // sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X] [--stride N]
     //
@@ -766,6 +793,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy contrast <file> [--min 3.0]
       sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X]
       sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
       sharpy diarize-batch <dir> --rttm-dir <out> [--diarizer speakerkit|clustering|sortformer]
