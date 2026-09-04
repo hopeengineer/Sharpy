@@ -213,6 +213,14 @@ public let tools: [[String: Any]] = [
                         "required": []],
     ],
     [
+        "name": "review_queue",
+        "description": "Where a person should look, ranked. Runs the assertions and turns their failures into a short list of moments with a reason each — blockers first, then holds, then advisories, with neighbouring findings merged into one place to look. If more than a fifth of the piece ends up flagged it says the queue is NOT selective and to watch the whole thing, because an eleven-minute selective review of a twelve-minute video is a full review with extra steps. Use this instead of asking someone to watch the piece.",
+        "inputSchema": ["type": "object",
+                        "properties": ["loudnessTarget": ["type": "string", "enum": ["broadcast", "streaming"],
+                                                          "description": "Assert against a delivery target as well."]],
+                        "required": []],
+    ],
+    [
         "name": "compare_to_catalogue",
         "description": "Check whether this edit looks like the work this person actually publishes — their own cutting rate, shot length, loudness and word rate, not a general norm. Assertions catch faults; nothing else catches an edit that is technically perfect and simply not theirs. Pass the measurements for the current piece; returns the axes that are unlike their usual work, or says plainly that there is too little history to know. Record a finished piece with `record_to_catalogue` so the norm exists at all.",
         "inputSchema": ["type": "object",
@@ -614,6 +622,33 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 else { lines.append("autonomy: no completed videos recorded yet — the cross-video trend starts once one is") }
             }
             return toolResult(lines.joined(separator: "\n"))
+
+        case "review_queue":
+            let doc = try session.requireDocument()
+            guard let url = session.mediaURL else { throw SessionError.noMediaOpen }
+            let target: LoudnessTarget? = {
+                switch args?["loudnessTarget"]?.stringValue {
+                case "broadcast": return .ebuR128
+                case "streaming": return .streaming
+                default: return nil
+                }
+            }()
+            let video = try? SequentialFrameSource(url: url)
+            let opts = RenderOptions(width: video?.width ?? 1920, height: video?.height ?? 1080,
+                                     sampleRate: session.sampleRate, loudnessTarget: target)
+            let renderSession = try RenderSession(document: doc, options: opts)
+            let perception = PerceptionContext(transcript: session.transcript,
+                                               vision: try? session.store.vision(for: url).0,
+                                               shots: try? session.store.shots(for: url).0,
+                                               width: video?.width ?? 1920,
+                                               height: video?.height ?? 1080)
+            let result = try renderSession.verify(using: Verifier.withPerception(perception))
+            // Warnings are included: an advisory is still somewhere worth an eye, and the budget
+            // is what stops the list becoming everything.
+            let queue = SelectiveReview.build(
+                items: SelectiveReview.items(from: result.blocking + result.holds + result.warnings),
+                pieceDuration: doc.timeline.duration)
+            return toolResult(queue.summary)
 
         case "compare_to_catalogue", "record_to_catalogue":
             guard let raw = args?["metrics"]?.objectValue else {

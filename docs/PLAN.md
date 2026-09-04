@@ -804,7 +804,25 @@ widens the spread enough to hide.
 
 MCP: `compare_to_catalogue` and `record_to_catalogue`.
 
-Still open in M4: selective review, and retention ingestion joined to the decision record.
+**Selective review is built** (2026-09-04). "No human at all" is the target; the honest interim is a
+human who looks at the right thirty seconds rather than the whole piece. A queue that lists
+everything is the same as no queue — the reviewer skims, and skimming finds nothing.
+
+`SelectiveReview` ranks (blockers, then holds, then advisories), merges neighbours within two
+seconds into one place to look, and **budgets**. Past a fifth of the piece it stops pretending:
+*"NOT SELECTIVE — watch it through; a queue this long is a full review with extra steps."* Saying
+that is more useful than a long list.
+
+Two merges it refuses, both pinned: a **blocking failure is never folded into a neighbouring
+advisory** — hiding the thing that stops the render inside something optional is the worst possible
+merge — and a failure with **no timestamp is given no place**, because inventing one sends a
+reviewer to the wrong second. Assertion modes map to severities without drift; a `hold` quietly
+becoming an advisory is how something ships that should not have.
+
+MCP: `review_queue`, which is what to call instead of asking someone to watch the piece.
+
+Still open in M4: retention ingestion joined to the decision record — it needs the creator's own
+channel analytics, which is external data this project does not have.
 
 ---
 

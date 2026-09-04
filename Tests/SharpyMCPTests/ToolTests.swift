@@ -69,7 +69,7 @@ final class ToolTests: XCTestCase {
     func testEveryToolDeclaresANameDescriptionAndSchema() {
         // Pinned deliberately: the agent surface is the product, and a tool appearing without a
         // decision is how a surface becomes a junk drawer. Bump it when you mean to.
-        XCTAssertEqual(tools.count, 17)
+        XCTAssertEqual(tools.count, 18)
         for t in tools {
             let name = t["name"] as? String
             XCTAssertNotNil(name)
