@@ -203,6 +203,15 @@ public let tools: [[String: Any]] = [
         "inputSchema": ["type": "object", "properties": [:], "required": []],
     ],
     [
+        "name": "get_scenes",
+        "description": "What kind of shot each part of the media is, what is happening, and where — from the VLM ingest pass, cross-checked against Apple Vision. Use it to answer 'keep the wide shots', to find a cutaway, or to know when the frame is a graphic card rather than a person. Every claim is the WEAKEST class of basis the document recognises and can never outrank a measured fact; claims Vision contradicted are reported but marked unusable. Returns nothing if the scene pass has not been run — it is an ingest step and needs a VLM.",
+        "inputSchema": ["type": "object",
+                        "properties": ["shot": ["type": "string",
+                                                "enum": ["closeUp", "medium", "wide", "card", "split", "other"],
+                                                "description": "Only return runs of this shot size."]],
+                        "required": []],
+    ],
+    [
         "name": "get_timeline",
         "description": "The current timeline: tracks, clips with their timeline and source ranges, duration, and the decision record with each decision's basis. Read this to see the effect of your edits.",
         "inputSchema": ["type": "object", "properties": [:], "required": []],
@@ -419,6 +428,43 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
             for (title, group) in [("WHAT THIS IS", r.facts), ("WORTH DOING", r.opportunities), ("PROBLEMS", r.problems)] where !group.isEmpty {
                 out.append(title)
                 for f in group { out.append("  · \(f.text)   [\(f.layer)]") }
+            }
+            return toolResult(out.joined(separator: "\n"))
+
+        case "get_scenes":
+            guard let url = session.mediaURL else { throw SessionError.noMediaOpen }
+            // Read-only: production links MLX and is an ingest step, so the agent surface serves
+            // what ingest cached and says plainly when there is nothing to serve.
+            guard let fingerprint = try? MediaFingerprint(of: url),
+                  let record = session.store.load(fingerprint),
+                  let scene = record.scene, !scene.observations.isEmpty else {
+                return toolResult("no scene index for this media. It is produced at ingest by the VLM pass (sharpy-scene); nothing is inferred here without it.")
+            }
+            var out = ["scene index from \(scene.model): \(scene.observations.count) observations",
+                       String(format: "  corroborated by Vision %.0f%%, contradicted %d, abstained %.0f%%",
+                              scene.corroborationRate * 100, scene.contradicted.count,
+                              scene.abstentionRate * 100)]
+            if let wanted = args?["shot"]?.stringValue.flatMap({ ShotSize(rawValue: $0) }) {
+                let step = scene.observations.count > 1
+                    ? scene.observations[1].time - scene.observations[0].time
+                    : TimeValue(seconds: Rational(1, 1))
+                let runs = scene.runs(of: wanted, tolerance: step)
+                if runs.isEmpty {
+                    out.append("  no usable \(wanted.rawValue) runs")
+                } else {
+                    for r in runs {
+                        out.append(String(format: "  %@  %7.2f–%7.2f  (%.1f s)", wanted.rawValue,
+                                          r.start.seconds.doubleValue, r.end.seconds.doubleValue,
+                                          r.duration.seconds.doubleValue))
+                    }
+                }
+            } else {
+                for o in scene.observations {
+                    let mark = o.standing == .contradicted ? "  [REJECTED: \(o.reason)]"
+                             : (o.standing == .unchecked ? "  [unchecked]" : "")
+                    out.append(String(format: "  %7.2f  %@  %@ — %@%@", o.time.seconds.doubleValue,
+                                      o.shot.rawValue, o.activity, o.setting, mark))
+                }
             }
             return toolResult(out.joined(separator: "\n"))
 

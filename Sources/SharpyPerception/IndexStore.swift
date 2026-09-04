@@ -46,18 +46,24 @@ public struct PerceptionRecord: Sendable, Codable {
     public var transcript: Transcript?
     public var vision: VisionIndex?
     public var shots: ShotIndex?
-    /// The two-engine transcript: WhisperKit's words, Apple's vote, per-word agreement.
+    /// The two-engine transcript: WhisperKit's words, Parakeet's vote, per-word agreement.
     public var votedTranscript: Transcript?
+    /// Shot size, activity and setting from the VLM pass. Produced by SharpySemantics, which is a
+    /// separate target because it links MLX — so this layer is DECLARED here and filled in there.
+    /// The store must be able to hold and serve it without linking MLX itself, or `swift test`
+    /// stops covering the perception layer.
+    public var scene: SceneIndex?
     public var speakers: SpeakerIndex?
     /// Analyser versions, so a changed algorithm invalidates its own layer and nothing else.
     public var producedBy: [String: String]
 
     public init(fingerprint: MediaFingerprint, path: String, transcript: Transcript? = nil,
                 vision: VisionIndex? = nil, shots: ShotIndex? = nil, votedTranscript: Transcript? = nil,
-                speakers: SpeakerIndex? = nil, producedBy: [String: String] = [:]) {
+                speakers: SpeakerIndex? = nil, scene: SceneIndex? = nil,
+                producedBy: [String: String] = [:]) {
         self.fingerprint = fingerprint; self.path = path
         self.transcript = transcript; self.vision = vision; self.shots = shots
-        self.votedTranscript = votedTranscript; self.speakers = speakers
+        self.votedTranscript = votedTranscript; self.speakers = speakers; self.scene = scene
         self.producedBy = producedBy
     }
 }
@@ -72,6 +78,9 @@ public final class IndexStore {
         "shots": "histogram-content/1",
         "votedTranscript": "whisperkit-large-v3-turbo+parakeet-tdt-v3/2",
         "speakers": "speakerkit-pyannote/1",
+        // Includes the model, because a scene index from a different VLM is a different index and
+        // must not be served from cache as though it were the same.
+        "scene": "gemma4-e2b-4bit/1",
     ]
 
     public init(root: URL? = nil) throws {
