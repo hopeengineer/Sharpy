@@ -74,6 +74,7 @@ public enum JSONValue: Codable {
     }
     public var boolValue: Bool? { if case .bool(let b) = self { return b }; return nil }
     public var arrayValue: [JSONValue]? { if case .array(let a) = self { return a }; return nil }
+    public var objectValue: [String: JSONValue]? { if case .object(let o) = self { return o }; return nil }
     public subscript(_ key: String) -> JSONValue? {
         if case .object(let o) = self { return o[key] }
         return nil
@@ -210,6 +211,22 @@ public let tools: [[String: Any]] = [
                                                 "enum": ["closeUp", "medium", "wide", "card", "split", "other"],
                                                 "description": "Only return runs of this shot size."]],
                         "required": []],
+    ],
+    [
+        "name": "compare_to_catalogue",
+        "description": "Check whether this edit looks like the work this person actually publishes — their own cutting rate, shot length, loudness and word rate, not a general norm. Assertions catch faults; nothing else catches an edit that is technically perfect and simply not theirs. Pass the measurements for the current piece; returns the axes that are unlike their usual work, or says plainly that there is too little history to know. Record a finished piece with `record_to_catalogue` so the norm exists at all.",
+        "inputSchema": ["type": "object",
+                        "properties": ["metrics": ["type": "object", "description": "Named numbers for this piece, e.g. {\"cutsPerMinute\": 12.4, \"wordsPerMinute\": 155, \"lufs\": -14.1}."],
+                                       "videoID": ["type": "string", "description": "Optional: exclude this id from the comparison so a re-edit is not measured against itself."]],
+                        "required": ["metrics"]],
+    ],
+    [
+        "name": "record_to_catalogue",
+        "description": "Add a delivered piece's measurements to the creator's catalogue, so future edits can be compared against what they actually publish. Call it on delivery, not on a draft — a catalogue of abandoned attempts describes nothing.",
+        "inputSchema": ["type": "object",
+                        "properties": ["videoID": ["type": "string"],
+                                       "metrics": ["type": "object", "description": "The same named numbers used by compare_to_catalogue."]],
+                        "required": ["videoID", "metrics"]],
     ],
     [
         "name": "note_preference",
@@ -597,6 +614,30 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 else { lines.append("autonomy: no completed videos recorded yet — the cross-video trend starts once one is") }
             }
             return toolResult(lines.joined(separator: "\n"))
+
+        case "compare_to_catalogue", "record_to_catalogue":
+            guard let raw = args?["metrics"]?.objectValue else {
+                return toolResult("\(name) needs a metrics object", isError: true)
+            }
+            var metrics: [String: Double] = [:]
+            for (key, value) in raw {
+                guard let number = value.doubleValue else {
+                    return toolResult("metric \"\(key)\" is not a number", isError: true)
+                }
+                metrics[key] = number
+            }
+            guard !metrics.isEmpty else { return toolResult("no metrics given", isError: true) }
+            do {
+                let catalogue = try Catalogue()
+                if name == "record_to_catalogue" {
+                    guard let videoID = args?["videoID"]?.stringValue, !videoID.isEmpty else {
+                        return toolResult("record_to_catalogue needs a videoID", isError: true)
+                    }
+                    try catalogue.record(CatalogueEntry(videoID: videoID, metrics: metrics))
+                    return toolResult("recorded \(videoID) — \(catalogue.all().count) piece(s) in the catalogue")
+                }
+                return toolResult(catalogue.compare(metrics, excluding: args?["videoID"]?.stringValue).summary)
+            } catch { return toolResult("catalogue: \(error)", isError: true) }
 
         case "note_preference":
             guard let note = args?["note"]?.stringValue, !note.isEmpty else {

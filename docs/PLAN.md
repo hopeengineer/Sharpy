@@ -782,8 +782,29 @@ silently justify repeating an edit nobody asked to have repeated. A promoted one
 `learnedPreference` at rank 5: below every measured fact, above craft convention, with confidence
 growing from repetition and **capped at 0.9**. Forty repetitions is a habit, not a fact about video.
 
-Still open in M4: regression gate against the creator's own catalogue, selective review, and
-retention ingestion joined to the decision record.
+**The regression gate is built** (2026-09-04). Assertions catch faults; nothing caught an edit that
+is technically perfect and simply *not theirs* — twice their usual cutting rate, delivered four LU
+louder than everything else they publish. Under the autonomy goal nobody is watching for that.
+
+`Catalogue` compares a piece against **their own** previous work, never a general norm: "most
+creators cut every 3 seconds" is a fact about most creators and says nothing about someone whose
+whole style is long takes. It produces `measuredNorm` carrying its **sample size**, so a claim from
+five pieces cannot be mistaken for a claim from fifty, and marked `correlational` because it
+measures what they have done, not what worked.
+
+Robust statistics throughout — median and median-absolute-deviation, not mean and standard
+deviation. A catalogue is small and contains real outliers: one experimental piece would drag a mean
+far enough to make the next ordinary edit look deviant, and the gate would be reporting its own
+arithmetic rather than the work. That exact case is a test.
+
+Three refusals, each pinned: fewer than five previous pieces makes **no claim at all**; a metric
+most of the catalogue lacks is **skipped** rather than compared against stragglers; and a re-edit is
+**excluded from its own norm** — otherwise it sits in the history it is being judged against and
+widens the spread enough to hide.
+
+MCP: `compare_to_catalogue` and `record_to_catalogue`.
+
+Still open in M4: selective review, and retention ingestion joined to the decision record.
 
 ---
 
