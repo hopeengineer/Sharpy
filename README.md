@@ -27,7 +27,13 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 
 ## Current state
 
-**M0 (engine) complete. M1 (perception) gate met. M2 assertions, MCP server, falsifiable brief, elicitation logging and the cut linter landed. Two-engine transcripts and diarization, the latter measured on 22.7 h of real annotated audio (3.67 % DER on VoxConverse). 151 tests green.**
+**M0 engine complete. M1 perception complete. M2 complete. M3 render verification — all four tiers
+built. M4 instruments — autonomy trend, style profiles, catalogue gate and selective review built.**
+
+Speech measured on **105,913 words** of LibriSpeech, diarization on **22.7 hours** of annotated
+audio, render verification on the author's own footage rather than on fixtures. 236 tests green.
+Remaining: the human surface (feed, assist queue, cut diff) and retention ingestion, which needs a
+creator's channel analytics this project does not have.
 
 | | |
 |---|---|
@@ -234,6 +240,11 @@ with no UI process in existence*, and it is met.
   while WhisperKit **and** Apple both drop the "n't" — so pairing WhisperKit with Apple would
   *agree* on the inversion and stamp it high-confidence. Two engines are a gate because their
   errors are uncorrelated, not because there are two of them.
+- **And they are measurably uncorrelated.** On 105,913 words of LibriSpeech the two engines
+  **swap**: WhisperKit wins on clean read speech (2.02 % vs 2.29 %), Parakeet wins on the noisy and
+  accented split (3.85 % vs 4.29 %). Neither dominates; overall they sit 0.09 points apart. Two
+  engines whose ranking inverts with recording conditions disagree exactly where the material is
+  hard, which is where a transcript needs a confidence signal.
 - **ASR was swapped only after re-measuring against the baseline it replaced.** WhisperKit scores
   **0.76 % WER against MLX whisper-turbo's 1.52 %** on the same reference audio, at 10× realtime
   versus 5×. Its two "lost" fillers are `uh` transcribed as `ah`, which `isFiller` still detects,
