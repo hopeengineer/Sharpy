@@ -463,6 +463,55 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "qc":
+    // sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X] [--stride N]
+    //
+    // Tiers 2 and 3 of render verification: measure the file that was actually written, then
+    // assert it against what the render undertook to produce. Tier 1 (the ID pass) runs during
+    // the render itself, because identity cannot be recovered from an encoded file.
+    guard let path = argv.dropFirst().first else {
+        fail("usage: sharpy qc <file> [--expect-frames N] [--expect-lufs X] [--stride N]")
+    }
+    do {
+        let url = URL(fileURLWithPath: path)
+        let qc = OutputQC(stride: Int64(option("--stride") ?? "1") ?? 1)
+        let t0 = Date()
+        let report = try qc.analyse(url: url)
+        let dt = Date().timeIntervalSince(t0)
+        let seconds = report.duration.seconds.doubleValue
+        print(String(format: "%d frames measured in %.1f s (%.0f fps, %.0f× realtime)",
+                     report.framesMeasured, dt, Double(report.framesMeasured) / max(dt, 0.001),
+                     seconds / max(dt, 0.001)))
+        print("  " + report.summary)
+        if let extremes = report.lumaExtremes {
+            let verdict = report.assessedRange.map { "assessed against \(Int($0.lowerBound))…\(Int($0.upperBound))" }
+                ?? "no range tag — measured only"
+            print(String(format: "  luma %.0f…%.0f  (%@)", extremes.lowerBound, extremes.upperBound, verdict))
+        }
+        if let loudness = report.loudness { print("  loudness: \(loudness)") }
+        for label in ["outside legal range": report.illegalLevelFrames,
+                      "black": report.blackFrames,
+                      "repeated": report.repeatedFrames] where !label.value.isEmpty {
+            let sample = label.value.prefix(10).map(String.init).joined(separator: ", ")
+            print("  \(label.key): \(label.value.count) frame(s) — \(sample)\(label.value.count > 10 ? ", …" : "")")
+        }
+
+        // Tier 3 only runs when something was actually predicted. Comparing against nothing and
+        // printing "matches" would be the emptiest kind of green tick.
+        let expectedFrames = option("--expect-frames").flatMap { Int($0) }
+        let expectedLUFS = option("--expect-lufs").flatMap { Double($0) }
+        if expectedFrames != nil || expectedLUFS != nil {
+            let predicted = RenderPrediction(frames: expectedFrames ?? report.framesMeasured,
+                                             duration: report.duration,
+                                             loudnessTarget: expectedLUFS)
+            let comparison = PredictedVsAchieved.compare(predicted: predicted, achieved: report)
+            print("  " + comparison.summary)
+            for finding in comparison.findings { print("     · \(finding)") }
+            if !comparison.isClean { exit(1) }
+        }
+        if !report.isClean { exit(1) }
+    } catch { fail("qc: \(error)") }
+
 case "transcribe-batch":
     // sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
     //
@@ -690,6 +739,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X]
       sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
       sharpy diarize-batch <dir> --rttm-dir <out> [--diarizer speakerkit|clustering|sortformer]
       sharpy speakers <file> [--cluster-threshold F] [--speakers N]

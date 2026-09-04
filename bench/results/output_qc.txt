@@ -1,0 +1,59 @@
+Render verification tiers 2 and 3 — signal QC on the output, predicted vs achieved
+Mac mini M4 (4P+6E, 16 GB), macOS 26.6.2, 2026-09-04.
+
+Why both tiers exist
+--------------------
+Tier 1 (the ID pass) proves what the COMPOSITOR did. It cannot prove what the ENCODER wrote.
+Tier 2 measures the written file. It has no idea what was INTENDED — a deliverable 6 LU quiet is
+perfectly legal and completely wrong. Tier 3 asserts the delta between them.
+
+Throughput — faster than the tool this replaces
+------------------------------------------------
+    1080x1920, 2649 frames    774 fps    26x realtime
+    4K,          900 frames    165 fps     5x realtime
+The plan recorded ffmpeg's `signalstats` at 53 fps for 4K. This is ~3x that, computed over the
+decoded luma plane with Accelerate, and it measures EVERY frame rather than sampling.
+
+THREE FALSE POSITIVES, FOUND BY RUNNING IT ON REAL FILES
+--------------------------------------------------------
+Each was caught because the first honest run was against the user's own reel and Sharpy's own
+render, not against a fixture built to pass.
+
+1. REPEATED FRAMES ARE NOT A FAULT. The reel has 416 repeated frames and every one is correct: a
+   static graphic card repeats frames because it is a static graphic card. Repeats are now an
+   OBSERVATION, and become a fault only against `RenderPrediction.expectsDistinctFrames`, which is
+   the caller's knowledge and defaults to false.
+
+2. LEGALITY IS UNDECIDABLE WITHOUT A TAG. AVFoundation synthesises a video-range default for
+   untagged media, so an unconditional check called 2088 of 2649 frames of the reel illegal. The
+   reel measures luma 0…255 — it is full range, and the "illegal" verdict was backwards. A verdict
+   now requires the file to carry a YCbCr MATRIX tag, which is what proves it was deliberately
+   tagged at all; without one the levels are measured and no verdict is given.
+
+3. HARD 16/235 LIMITS FAIL CORRECT RENDERS. Sharpy's own render of that full-range source lands at
+   luma 15…237 — the conversion is right, with a code value or two of rounding and chroma
+   interpolation overshoot, as every correctly encoded file has. Hard limits called 1419 of 2479
+   frames illegal. The bound is now EBU R103's tolerance, 5…246, with 16…235 reported as the
+   nominal range rather than asserted. A QC tier that fails correct output is one that gets
+   switched off, and a switched-off gate protects nothing.
+
+A finding about AVFoundation, learned from a fixture that was wrong
+-------------------------------------------------------------------
+AVAssetWriter ALWAYS range-converts. Writing 255 into a full-range NV12 buffer yields 236 in the
+file; 200 yields 188. A superwhite deliverable therefore cannot originate from Sharpy's own writer
+path — that fault can only arrive in a file produced elsewhere. The first version of the
+illegal-levels fixture wrote BGRA 255 and expected superwhite, got a correctly converted 235, and
+would have passed forever without testing anything.
+
+The gate: deliberately broken renders
+--------------------------------------
+Ten tests, each breaking something on purpose — levels outside tolerance, black frames, repeated
+frames, a missing frame against prediction, off-target loudness — plus the counterparts that keep
+them honest: a legal picture must stay clean, normal rounding overshoot must not be flagged, and a
+loudness shortfall the render already DECLARED (the true-peak ceiling bound the gain) is not a
+fault, because a deliverable quiet on purpose is not a missed target.
+
+Running rule: a check that could not run reports as a FAILURE, never a quiet pass.
+"We measured and it was fine" and "we did not measure" are different claims.
+
+Reproduce: sharpy qc <file> [--expect-frames N] [--expect-lufs X]
