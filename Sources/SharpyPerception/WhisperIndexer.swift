@@ -41,23 +41,27 @@ public struct WhisperIndexer {
     }
 
     public func transcribe(url: URL, asset: NodeID) async throws -> Transcript {
-        let config = WhisperKitConfig(model: model)
-        let whisper: WhisperKit
-        do { whisper = try await WhisperKit(config) }
-        catch {
-            // Name what is actually there, so a wrong model string costs one turn rather than five.
-            let available = (try? await WhisperKit.fetchAvailableModels()) ?? []
-            let hint = available.isEmpty ? "" : "\n  available: \(available.prefix(12).joined(separator: ", "))"
-            throw WhisperIndexError.modelUnavailable("\(model)\(hint)")
-        }
-
         var options = DecodingOptions()
         options.wordTimestamps = true          // without this there is nothing to cut against
         options.language = language
         options.withoutTimestamps = false
         options.verbose = false
 
-        let results = try await whisper.transcribe(audioPath: url.path, decodeOptions: options)
+        // The model is loaded once per process and the call runs inside ModelCache's actor — see
+        // there for why the instance is never handed out. Building it here made a 2620-file corpus
+        // pay 2620 model loads.
+        let results: [TranscriptionResult]
+        do {
+            results = try await ModelCache.shared.transcribe(model: model, path: url.path,
+                                                             options: options)
+        } catch is WhisperError {
+            throw WhisperIndexError.modelUnavailable(model)
+        } catch {
+            // Name what is actually there, so a wrong model string costs one turn rather than five.
+            let available = (try? await WhisperKit.fetchAvailableModels()) ?? []
+            let hint = available.isEmpty ? "" : "\n  available: \(available.prefix(12).joined(separator: ", "))"
+            throw WhisperIndexError.modelUnavailable("\(model)\(hint)")
+        }
 
         var words: [Word] = []
         for result in results {

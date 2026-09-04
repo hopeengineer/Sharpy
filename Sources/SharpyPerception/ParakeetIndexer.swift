@@ -52,15 +52,17 @@ public struct ParakeetIndexer {
     }
 
     public func transcribe(url: URL, asset: NodeID) async throws -> Transcript {
-        let models: AsrModels
+        let manager: AsrManager
+        // Loaded once per process — see ModelCache.
         do {
-            models = try await AsrModels.downloadAndLoad(version: version, encoderPrecision: encoderPrecision)
+            manager = try await ModelCache.shared.parakeetManager(version: version,
+                                                                  encoderPrecision: encoderPrecision)
         } catch {
             throw ParakeetIndexError.modelUnavailable(String(describing: error))
         }
-        let manager = AsrManager()
-        try await manager.loadModels(models)
 
+        // The decoder state is NOT cached. It carries the RNN-T decoder's history, so reusing it
+        // across unrelated files would let one file's ending condition the next file's opening.
         var state = try TdtDecoderState()
         let result = try await manager.transcribe(url, decoderState: &state)
         guard let tokens = result.tokenTimings, !tokens.isEmpty else {
