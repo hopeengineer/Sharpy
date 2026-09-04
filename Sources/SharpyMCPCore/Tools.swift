@@ -212,6 +212,13 @@ public let tools: [[String: Any]] = [
                         "required": []],
     ],
     [
+        "name": "record_autonomy",
+        "description": "Write this session's question count and footage duration into the durable autonomy journal, closing out one finished video. Call it when a piece is delivered, not when it is abandoned — a video given up on is not a data point about how much help was needed. Returns the trend across recent videos: whether the number of questions per hour of footage is falling, which is the measure of whether this tool is getting closer to needing nobody.",
+        "inputSchema": ["type": "object",
+                        "properties": ["videoID": ["type": "string", "description": "A stable name for the piece, so re-edits are visible as separate events."]],
+                        "required": ["videoID"]],
+    ],
+    [
         "name": "get_timeline",
         "description": "The current timeline: tracks, clips with their timeline and source ranges, duration, and the decision record with each decision's basis. Read this to see the effect of your edits.",
         "inputSchema": ["type": "object", "properties": [:], "required": []],
@@ -563,7 +570,32 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
             if let url = session.mediaURL, let video = try? SequentialFrameSource(url: url) {
                 _ = video    // duration is recorded by the caller that actually handled the footage
             }
-            return toolResult(session.elicitations.report().summary)
+            let sessionReport = session.elicitations.report()
+            var lines = [sessionReport.summary]
+            // The session number alone cannot show the thing M4 measures: questions naturally
+            // taper within one video as it is understood. The claim worth making is across videos,
+            // so the durable journal is read here too.
+            if let journal = try? AutonomyJournal() {
+                let trend = journal.trend()
+                if !trend.entries.isEmpty { lines.append(trend.summary) }
+                else { lines.append("autonomy: no completed videos recorded yet — the cross-video trend starts once one is") }
+            }
+            return toolResult(lines.joined(separator: "\n"))
+
+        case "record_autonomy":
+            // Closes the loop: the session's asking is written to the durable journal so the trend
+            // across videos exists at all. Explicit rather than automatic — a video the agent
+            // abandoned halfway is not a data point about how much help it needed.
+            guard let videoID = args?["videoID"]?.stringValue, !videoID.isEmpty else {
+                return toolResult("record_autonomy needs a videoID", isError: true)
+            }
+            do {
+                let journal = try AutonomyJournal()
+                try journal.record(session.elicitations.report(), videoID: videoID)
+                return toolResult("recorded \(videoID)\n" + journal.trend().summary)
+            } catch {
+                return toolResult("could not record: \(error)", isError: true)
+            }
 
         case "undo":
             guard let log = session.log, !log.commands.isEmpty else {

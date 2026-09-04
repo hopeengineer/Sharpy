@@ -740,6 +740,32 @@ surface — feed, assist queue, cut diff, override timeline.
 - **Gate:** request rate per hour of footage reported and falling across ten consecutive
   routine videos for one creator.
 
+**The gate instrument is built** (2026-09-04). `AutonomyJournal` keeps a durable, per-video record
+— hours of footage, questions asked, residue — and reports the trend. The elicitation log answers
+this for one session, which is not the claim: questions naturally taper within a video as it is
+understood, so the record has to outlive the process. `record_autonomy` (MCP) closes out a
+delivered video; `autonomy_report` now returns the session number *and* the cross-video trend.
+
+Three properties make it a gate rather than a scoreboard, each pinned by test:
+- The denominator is **hours of footage**, never videos. Ten questions over ten hours and ten over
+  ten minutes are different products, and counting videos would reward short ones.
+- The trend is a **least-squares slope**, not first-versus-last. A series that starts at 20, spends
+  its middle in the high 30s and ends at 19 looks like an improvement at the endpoints and is
+  getting worse; that case is a test.
+- A video recorded with **no footage duration** is refused rather than counted as a rate of zero,
+  because a zero denominator would flatter the trend for free.
+
+**Residue is tracked separately from questions**, because a question answered into a durable rule is
+progress and the same question answered again every time is the system standing still while looking
+busy. Without that split a falling rate could just mean the user stopped asking for things.
+
+Also built toward M4: the **compile-rate residue report** exists as `ProposalReport` — a model whose
+proposals mostly fail to compile is describing checks this system does not have, which is a roadmap
+rather than a fault (`bench/results/text_contrast.txt`).
+
+Still open in M4: regression gate against the creator's own catalogue, selective review, retention
+ingestion joined to the decision record, and style profiles writing `learnedPreference`.
+
 ---
 
 ## 10. Risks, re-ranked by measurement
