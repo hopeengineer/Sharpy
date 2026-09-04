@@ -212,6 +212,22 @@ public let tools: [[String: Any]] = [
                         "required": []],
     ],
     [
+        "name": "note_preference",
+        "description": "Record a note the person gave about how they want their work edited, in their own words. Returns whether it has now been asked enough times to be offered as a rule. Call it every time a correction is applied, not only when it seems important — the whole point is to notice repetition, and a note you decided was minor is exactly the one that gets asked for a fourth time. An unpromoted preference justifies nothing on its own.",
+        "inputSchema": ["type": "object",
+                        "properties": ["note": ["type": "string", "description": "Their wording, verbatim. Do not paraphrase — a rule they cannot recognise is one they cannot audit."],
+                                       "project": ["type": "string", "description": "Optional project name, if the note is about this piece rather than everything."]],
+                        "required": ["note"]],
+    ],
+    [
+        "name": "promote_preference",
+        "description": "Turn a repeated note into a rule, after the person has agreed. Scope is 'project' for this piece or 'standing' for everything they do. Only a promoted preference can supply a basis for an edit, and even then it ranks below any measured fact.",
+        "inputSchema": ["type": "object",
+                        "properties": ["id": ["type": "string", "description": "The preference id returned by note_preference."],
+                                       "scope": ["type": "string", "enum": ["project", "standing"]]],
+                        "required": ["id", "scope"]],
+    ],
+    [
         "name": "record_autonomy",
         "description": "Write this session's question count and footage duration into the durable autonomy journal, closing out one finished video. Call it when a piece is delivered, not when it is abandoned — a video given up on is not a data point about how much help was needed. Returns the trend across recent videos: whether the number of questions per hour of footage is falling, which is the measure of whether this tool is getting closer to needing nobody.",
         "inputSchema": ["type": "object",
@@ -581,6 +597,39 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 else { lines.append("autonomy: no completed videos recorded yet — the cross-video trend starts once one is") }
             }
             return toolResult(lines.joined(separator: "\n"))
+
+        case "note_preference":
+            guard let note = args?["note"]?.stringValue, !note.isEmpty else {
+                return toolResult("note_preference needs a note", isError: true)
+            }
+            do {
+                let profile = try StyleProfile()
+                let project = args?["project"]?.stringValue
+                switch try profile.note(note, project: project) {
+                case .recorded(let id, let occurrences):
+                    return toolResult("recorded (\(occurrences)× so far) — id \(id)")
+                case .offerPromotion(let id, let text, let occurrences):
+                    // The specification calls an unpromoted repeat a tooling failure, so the tool
+                    // says what to do about it rather than reporting a count and moving on.
+                    return toolResult("""
+                    \"\(text)\" has now been asked \(occurrences) times.
+                    Offer to make it a rule — this project or standing — and call promote_preference with id \(id).
+                    Asking a fourth time without offering is a tooling failure, not a preference.
+                    """)
+                }
+            } catch { return toolResult("could not record: \(error)", isError: true) }
+
+        case "promote_preference":
+            guard let id = args?["id"]?.stringValue,
+                  let scopeName = args?["scope"]?.stringValue,
+                  let scope = PreferenceScope(rawValue: scopeName), scope != .once else {
+                return toolResult("promote_preference needs an id and scope of project or standing", isError: true)
+            }
+            do {
+                let profile = try StyleProfile()
+                let promoted = try profile.promote(id, to: scope)
+                return toolResult("\"\(promoted.text)\" is now a \(scope.rawValue) rule (asked \(promoted.occurrences)×, confidence \(promoted.confidence))")
+            } catch { return toolResult("could not promote: \(error)", isError: true) }
 
         case "record_autonomy":
             // Closes the loop: the session's asking is written to the durable journal so the trend

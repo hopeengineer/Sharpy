@@ -763,8 +763,27 @@ Also built toward M4: the **compile-rate residue report** exists as `ProposalRep
 proposals mostly fail to compile is describing checks this system does not have, which is a roadmap
 rather than a fault (`bench/results/text_contrast.txt`).
 
-Still open in M4: regression gate against the creator's own catalogue, selective review, retention
-ingestion joined to the decision record, and style profiles writing `learnedPreference`.
+**Style profiles are built** (2026-09-04). The specification states the requirement in the reel's own
+narration: *"when a note is applied, you offer to promote it — this once, this project, or a
+standing rule. A preference repeated three times without being promoted is a tooling failure."*
+
+`StyleProfile` records notes in the person's **verbatim wording** — a promoted rule they cannot
+recognise is one they cannot audit, and an unauditable rule is how an autonomous system drifts —
+and matches them on normalised text, so "Keep the wides." and "keep the wides" are one request
+rather than two. Treating them as two is precisely how a system asks the same question forever
+while its own records show it never repeated itself.
+
+At the third repeat it returns `offerPromotion` rather than a count; `note_preference` and
+`promote_preference` are MCP tools. A preference repeated to threshold and still unpromoted is
+reported as a **TOOLING FAILURE** by name, not counted quietly.
+
+An **unpromoted preference supplies no basis at all** — applied once is not a rule, and it must not
+silently justify repeating an edit nobody asked to have repeated. A promoted one supplies
+`learnedPreference` at rank 5: below every measured fact, above craft convention, with confidence
+growing from repetition and **capped at 0.9**. Forty repetitions is a habit, not a fact about video.
+
+Still open in M4: regression gate against the creator's own catalogue, selective review, and
+retention ingestion joined to the decision record.
 
 ---
 
