@@ -35,9 +35,10 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Render | Frame-accurate, sample-accurate audio, **903 fps** on a 1080×1920 timeline |
 | Colour | OpenColorIO 2.5.2, ACES built in. Linear→sRGB matches IEC 61966-2-1 within 2 code values |
 | Loudness | EBU R128 in Swift. Agrees with ffmpeg's `ebur128` within **0.06 LU** |
-| Speech | WhisperKit (verbatim, per-word probability) + Apple `SpeechAnalyzer`, voting per word |
+| Speech | WhisperKit (verbatim, per-word probability) + **Parakeet TDT v3**, voting per word |
 | Speakers | SpeakerKit (pyannote via CoreML). 3.67 % DER on VoxConverse; counting is the weak axis — see below |
 | Picture | Apple Vision — faces, hands, OCR at 0.23 s per sampled frame |
+| Scene | Gemma 4 E2B — shot size, activity, setting at 2.2 s/frame, **cross-checked against Vision** and unable to outrank it |
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
 | Verify | 16 assertions gate every render — `block` / `warn` / **`hold`** |
@@ -250,6 +251,25 @@ with no UI process in existence*, and it is met.
   answer*, and every downstream check validates against the misreading. Give the brief a register
   and stakes and "made a serious video funny" becomes an assertion violation with a timecode.
   A brief that compiles to nothing warns that it cannot catch a misreading.
+
+### The VLM is only asked what Vision cannot answer
+
+Apple Vision beat every local VLM tested on faces (22/22), hands (21/21) and on-screen text
+(89/90 lines) while running ~4× faster, so the VLM is never asked those. It is asked three things:
+shot size, what is happening, where. Every answer is the **weakest** class of basis the document
+recognises, and a claim Vision contradicts supplies **no basis at all** — so it cannot reach a
+render.
+
+The cross-check is deliberately *logical* rather than statistical. "You said this is a card with
+nobody in it, but Vision found a face" is a contradiction at any threshold on any footage.
+Deriving shot-size thresholds from face-box geometry was rejected: the labelled set has exactly
+two split-layout frames, and a rule fitted to two examples is a rule fitted to a fixture.
+
+That design has one hole and it is closed rather than ignored: `wide` and `other` assert nothing
+Vision can refute, so a model that abstained on every frame would post a perfect zero
+contradictions. Abstention is *correct* on a genuinely ambiguous frame — the test reel has a
+near-blank one at 40.0 s — so it isn't banned, it's **counted**, and an index above 50 % abstention
+is refused. On the reel: 12 observations, 92 % corroborated, 0 contradicted, 8 % abstained.
 
 ### Diarization, measured on 22.7 hours of real annotated audio
 
