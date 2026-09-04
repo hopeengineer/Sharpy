@@ -224,7 +224,10 @@ case "render":
         }
         print(String(format: "rendered:  %d frames + %d audio samples in %.2f s = %.1f fps → %@",
                      report.framesRendered, report.audioSamplesWritten, report.wallSeconds, report.fps, outPath))
-        if report.spatial.framesChecked > 0 {
+        // Printed whenever the guard ran at all — including when it found nothing to check.
+        // Suppressing that case is how "nothing was verified" becomes indistinguishable from
+        // "nothing was wrong".
+        if report.spatial.framesChecked > 0 || report.spatial.framesNotCheckable > 0 {
             print("spatial:   " + report.spatial.summary)
             // Show a few, and say how many were suppressed. A wall of findings for one bad wipe
             // teaches nothing; a silent truncation hides the scale.

@@ -698,6 +698,41 @@ render verification and UI, and M4's autonomy instruments beyond the elicitation
 - **Gate:** zero regressions on a fixture set of deliberately broken renders (edge on face,
   illegal levels, dropped frame, off-target LUFS).
 
+**Tiers 1–3 are built and measured** (2026-09-04).
+
+*Tier 1 — the renderer instruments itself.* The Metal kernel emits an rg32Uint identity pass in the
+same dispatch: a presence bitmask and the topmost visible owner per pixel. It costs **nothing** —
+86.4 → 87.0 fps at four 4K layers, 83.4 → 79.4 with ACES — because the pipeline is decode-bound.
+`kEmitIDs` is a function constant, so the ordinary path compiles the feature out rather than
+branching over it. `sharpy render --guard-subjects` feeds it real Vision boxes and checks every
+frame; 205 fps on the reel. Full numbers: `bench/results/id_pass.txt`.
+
+*Tiers 2–3 — signal QC and predicted-vs-achieved.* 774 fps at 1080×1920 and 165 fps at 4K, about
+3× the ffmpeg `signalstats` figure in §2.3, over the decoded luma plane with Accelerate, and
+measuring every frame rather than sampling. `bench/results/output_qc.txt`.
+
+**Four false positives were removed by running these against real files rather than fixtures**, and
+they are the substance of what was learned:
+1. *Repeated frames are not a fault.* The reel has 416, every one correct — a static graphic card
+   repeats frames because it is one. Now an observation, a fault only against an explicit
+   `expectsDistinctFrames`.
+2. *Legality is undecidable without a tag.* AVFoundation synthesises a video-range default, so an
+   unconditional check called 2088 of 2649 reel frames illegal — while the reel measures luma
+   0–255 and is full range. A verdict now requires the file to carry a YCbCr matrix tag.
+3. *Hard 16/235 limits fail correct renders.* Sharpy's own render of that source lands at 15–237 —
+   right conversion, ordinary rounding overshoot — and hard limits called 1419 of 2479 frames
+   illegal. The bound is now EBU R103's 5–246 tolerance.
+4. *"Clean" must not mean "empty".* The spatial tier reported "clean across 2649 frames" on a
+   single-layer render, having examined none of them: one layer cannot cut through anything. It now
+   separates checkable frames from frames with nothing to check.
+
+Also recorded because it constrains the design: **AVAssetWriter always range-converts** (255 in a
+full-range buffer becomes 236 in the file), so a superwhite deliverable cannot originate from
+Sharpy's own writer path.
+
+Still open in M3: tier 4 (VLM as proposer, compiling to deterministic assertions) and the human
+surface — feed, assist queue, cut diff, override timeline.
+
 ### M4 — autonomy instruments
 - Regression gate against own catalogue; selective review; compile-rate residue report;
   YouTube retention ingestion joined to the decision record; style profile writing

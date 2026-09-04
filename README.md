@@ -42,6 +42,8 @@ That is enforced at the type level: `Decision.init` takes a non-optional `Basis`
 | Shots | Histogram content detector with a threshold derived from the material |
 | Index | Content-addressed cache keyed by media fingerprint **and** analyser version |
 | Verify | 16 assertions gate every render — `block` / `warn` / **`hold`** |
+| Spatial | Cryptomatte-style ID pass, **free** (86.4 → 87.0 fps at 4×4K). Every frame checked against real subject boxes |
+| Output QC | Levels, black, repeats and loudness on the written file at **774 fps**, then predicted-vs-achieved |
 | Agent | MCP server over stdio: 11 tools, word-addressed editing, no frame arithmetic |
 
 ### Try it
