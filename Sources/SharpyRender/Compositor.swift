@@ -10,12 +10,42 @@ import simd
 public struct LayerPlacement: Sendable, Equatable {
     /// Top-left of the layer in output pixels.
     public var offset: SIMD2<Float>
-    /// Uniform scale relative to the layer's native size.
+    /// Scale relative to the layer's native size. Separate axes so a clip can be stretched, which
+    /// is occasionally wanted and always better than silently refusing.
     public var scale: Float
-    /// 0…1, straight alpha applied as "over".
+    public var scaleY: Float?
+    /// 0…1, straight alpha.
     public var opacity: Float
-    public init(offset: SIMD2<Float> = .zero, scale: Float = 1, opacity: Float = 1) {
-        self.offset = offset; self.scale = scale; self.opacity = opacity
+    /// Clockwise degrees about the layer's centre.
+    public var rotation: Float
+    /// Flip about the layer's centre. Horizontal mirroring is the front-camera fix: a selfie
+    /// recording is stored as the shooter saw themselves, so any text in shot reads backwards.
+    public var mirrorX: Bool
+    public var mirrorY: Bool
+    /// Fractions of the SOURCE trimmed from each side, applied before scaling.
+    public var crop: SIMD4<Float>          // left, right, top, bottom
+    /// 0 over · 1 add · 2 multiply · 3 screen · 4 overlay
+    public var blend: UInt32
+    /// Mask in LAYER fractions: x, y, width, height. Zero width means no mask.
+    public var maskRect: SIMD4<Float>
+    /// Edge softness as a fraction of the layer's smaller side.
+    public var maskFeather: Float
+    /// 0 rectangle · 1 ellipse
+    public var maskShape: UInt32
+    public var maskInverted: Bool
+
+    public init(offset: SIMD2<Float> = .zero, scale: Float = 1, scaleY: Float? = nil,
+                opacity: Float = 1, rotation: Float = 0,
+                mirrorX: Bool = false, mirrorY: Bool = false,
+                crop: SIMD4<Float> = .zero, blend: UInt32 = 0,
+                maskRect: SIMD4<Float> = .zero, maskFeather: Float = 0,
+                maskShape: UInt32 = 0, maskInverted: Bool = false) {
+        self.offset = offset; self.scale = scale; self.scaleY = scaleY
+        self.opacity = opacity; self.rotation = rotation
+        self.mirrorX = mirrorX; self.mirrorY = mirrorY
+        self.crop = crop; self.blend = blend
+        self.maskRect = maskRect; self.maskFeather = maskFeather
+        self.maskShape = maskShape; self.maskInverted = maskInverted
     }
     public static let full = LayerPlacement()
 }
@@ -55,6 +85,15 @@ public final class MetalCompositor: @unchecked Sendable {
     private struct LayerUniform {
         var offset: SIMD2<Float>; var scale: Float; var opacity: Float
         var srcSize: SIMD2<Float>; var isBGRA: UInt32; var matrix: UInt32 = 0
+        var scaleY: Float = 1
+        var cosR: Float = 1, sinR: Float = 0
+        var mirror: SIMD2<Float> = SIMD2(1, 1)        // -1 flips that axis
+        var crop: SIMD4<Float> = .zero
+        var blend: UInt32 = 0
+        var maskRect: SIMD4<Float> = .zero
+        var maskFeather: Float = 0
+        var maskShape: UInt32 = 0
+        var maskInverted: UInt32 = 0
     }
 
     public init(device: MTLDevice? = MTLCreateSystemDefaultDevice(),
@@ -141,9 +180,19 @@ public final class MetalCompositor: @unchecked Sendable {
                 throw CompositorError.unsupportedPixelFormat(fmt)
             }
             let tag = ColorTag.of(pb)
-            uniforms.append(LayerUniform(offset: layer.placement.offset, scale: layer.placement.scale, opacity: layer.placement.opacity,
-                                         srcSize: SIMD2(Float(w), Float(h)), isBGRA: fmt == kCVPixelFormatType_32BGRA ? 1 : (tag.fullRange ? 2 : 0),
-                                         matrix: tag.matrix.rawValue))
+            let pl = layer.placement
+            let radians = pl.rotation * .pi / 180
+            uniforms.append(LayerUniform(
+                offset: pl.offset, scale: pl.scale, opacity: pl.opacity,
+                srcSize: SIMD2(Float(w), Float(h)),
+                isBGRA: fmt == kCVPixelFormatType_32BGRA ? 1 : (tag.fullRange ? 2 : 0),
+                matrix: tag.matrix.rawValue,
+                scaleY: pl.scaleY ?? pl.scale,
+                cosR: cos(radians), sinR: sin(radians),
+                mirror: SIMD2(pl.mirrorX ? -1 : 1, pl.mirrorY ? -1 : 1),
+                crop: pl.crop, blend: pl.blend,
+                maskRect: pl.maskRect, maskFeather: pl.maskFeather,
+                maskShape: pl.maskShape, maskInverted: pl.maskInverted ? 1 : 0))
         }
         for i in layers.count..<MetalCompositor.maxLayers { plane0[i] = plane0[0] ?? output; plane1[i] = plane1[0] ?? output }
         while uniforms.count < MetalCompositor.maxLayers { uniforms.append(LayerUniform(offset: .zero, scale: 1, opacity: 0, srcSize: .one, isBGRA: 1, matrix: 0)) }
@@ -175,7 +224,49 @@ public final class MetalCompositor: @unchecked Sendable {
     """
 
     static let body = """
-    struct Layer { float2 offset; float scale; float opacity; float2 srcSize; uint isBGRA; uint matrix; };
+    struct Layer {
+        float2 offset; float scale; float opacity; float2 srcSize; uint isBGRA; uint matrix;
+        float scaleY; float cosR; float sinR; float2 mirror; float4 crop;
+        uint blend; float4 maskRect; float maskFeather; uint maskShape; uint maskInverted;
+    };
+
+    // Mask coverage in 0…1, in LAYER-relative coordinates. Feathered with smoothstep so an edge is
+    // soft rather than aliased: a hard-edged mask on moving footage crawls, and crawling is the
+    // thing that makes a composite look cheap.
+    static inline float maskCoverage(float2 uv, Layer L) {
+        if (L.maskRect.z <= 0.0 || L.maskRect.w <= 0.0) return 1.0;
+        float2 c = L.maskRect.xy + L.maskRect.zw * 0.5;
+        float2 h = L.maskRect.zw * 0.5;
+        float f = max(L.maskFeather, 1e-4);
+        float inside;
+        if (L.maskShape == 1u) {
+            float2 d = (uv - c) / max(h, float2(1e-4));
+            float r = length(d);
+            inside = 1.0 - smoothstep(1.0 - f, 1.0 + f, r);
+        } else {
+            float2 d = abs(uv - c) - h;
+            float dx = 1.0 - smoothstep(-f, f, d.x);
+            float dy = 1.0 - smoothstep(-f, f, d.y);
+            inside = dx * dy;
+        }
+        return L.maskInverted == 1u ? 1.0 - inside : inside;
+    }
+
+    // Blending happens in LINEAR light, after the input transform. Screen and add applied to
+    // display-encoded values give the wrong answer and look electric.
+    static inline float3 blendWith(float3 base, float3 top, uint mode) {
+        switch (mode) {
+            case 1u: return base + top;                              // add
+            case 2u: return base * top;                              // multiply
+            case 3u: return 1.0 - (1.0 - base) * (1.0 - top);        // screen
+            case 4u: {                                               // overlay
+                float3 lo = 2.0 * base * top;
+                float3 hi = 1.0 - 2.0 * (1.0 - base) * (1.0 - top);
+                return select(hi, lo, base < 0.5);
+            }
+            default: return top;                                     // over
+        }
+    }
     // Off by default. With it off the ID texture is never bound and every line guarded by it is
     // compiled away, so the ordinary render path is byte-for-byte the kernel that measured 83.4 fps
     // at four 4K layers.
@@ -216,13 +307,27 @@ public final class MetalCompositor: @unchecked Sendable {
         float ownerWeight = 0.0;
         for (uint i = 0; i < n; i++) {
             Layer L = layers[i];
-            float2 p = (float2(gid) + 0.5 - L.offset) / L.scale;     // source pixel coords
-            if (p.x < 0.0 || p.y < 0.0 || p.x >= L.srcSize.x || p.y >= L.srcSize.y) continue;
+            // Output pixel -> layer space. Rotation is undone about the layer's centre, so the
+            // inverse transform is: translate to layer origin, unrotate, unscale, unmirror.
+            float2 cropped = float2(L.srcSize.x * (1.0 - L.crop.x - L.crop.y),
+                                    L.srcSize.y * (1.0 - L.crop.z - L.crop.w));
+            float2 drawn = float2(cropped.x * L.scale, cropped.y * L.scaleY);
+            float2 centre = L.offset + drawn * 0.5;
+            float2 d = float2(gid) + 0.5 - centre;
+            // Inverse rotation: the forward transform rotates by +r, so undo with -r.
+            float2 r = float2(d.x * L.cosR + d.y * L.sinR, -d.x * L.sinR + d.y * L.cosR);
+            r *= L.mirror;
+            float2 inLayer = r / max(float2(L.scale, L.scaleY), float2(1e-6)) + cropped * 0.5;
+            if (inLayer.x < 0.0 || inLayer.y < 0.0 || inLayer.x >= cropped.x || inLayer.y >= cropped.y) continue;
+            float2 layerUV = inLayer / cropped;
+            float coverage = maskCoverage(layerUV, L);
+            if (coverage <= 0.0) continue;
+            float2 p = float2(L.srcSize.x * L.crop.x, L.srcSize.y * L.crop.z) + inLayer;
             float2 uv = p / L.srcSize;
             float3 c = (L.isBGRA == 1) ? p0[i].sample(s, uv).rgb : toRGB(p0[i].sample(s, uv).r, p1[i].sample(s, uv).rg, L.isBGRA == 2 ? 1u : 0u, L.matrix);
             // Into the linear working space before blending: light adds, display code values do not.
             c = SharpyInputTransform(float4(c, 1.0)).rgb;
-            float la = L.opacity;
+            float la = L.opacity * coverage;
             if (kEmitIDs && la > 0.0) {
                 present |= (1u << i);
                 // Every layer already composited is attenuated by this one. Tracking the survivor
@@ -231,7 +336,8 @@ public final class MetalCompositor: @unchecked Sendable {
                 ownerWeight *= (1.0 - la);
                 if (la >= ownerWeight) { owner = i; ownerWeight = la; }
             }
-            rgb = c * la + rgb * (1.0 - la);
+            float3 mixed = blendWith(rgb, c, L.blend);
+            rgb = mixed * la + rgb * (1.0 - la);
             a = la + a * (1.0 - la);
         }
         // One display transform on the composited result.

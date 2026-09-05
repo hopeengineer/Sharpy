@@ -60,17 +60,110 @@ public struct AssetRef: Hashable, Sendable, Codable {
 /// Exact rationals rather than floats, for the same reason time is: a placement that a document
 /// round-trips must come back identical, and repeated float arithmetic on a scale drifts. The
 /// conversion to Float happens once, at the compositor boundary.
+/// How two layers combine. "Over" is ordinary compositing; the rest are the handful an editor
+/// actually reaches for. Blending happens in LINEAR light, after the input transform — screen and
+/// add on display-encoded values produce the wrong result and look "electric".
+public enum BlendMode: String, Hashable, Sendable, Codable, CaseIterable {
+    case over, add, multiply, screen, overlay
+    var code: UInt32 {
+        switch self {
+        case .over: return 0; case .add: return 1; case .multiply: return 2
+        case .screen: return 3; case .overlay: return 4
+        }
+    }
+}
+
+/// A shape that limits where a layer is visible.
+///
+/// Fractions of the LAYER, not of the output, so a mask survives the layer being moved or resized —
+/// which is what a person means by "mask the top third of this clip". A mask in output coordinates
+/// would slide off its subject the moment the clip was repositioned.
+public struct Mask: Hashable, Sendable, Codable {
+    public enum Shape: String, Hashable, Sendable, Codable { case rectangle, ellipse }
+    public let shape: Shape
+    /// Fractions of the layer: 0…1 in each axis.
+    public let x: Rational, y: Rational, width: Rational, height: Rational
+    /// Softness of the edge, as a fraction of the layer's smaller side. Zero is a hard edge.
+    public let feather: Rational
+    /// Hide inside the shape instead of outside — for covering a face or a logo.
+    public let inverted: Bool
+
+    public init(shape: Shape = .rectangle, x: Rational, y: Rational,
+                width: Rational, height: Rational,
+                feather: Rational = Rational(1, 100), inverted: Bool = false) {
+        self.shape = shape; self.x = x; self.y = y
+        self.width = width; self.height = height
+        self.feather = feather; self.inverted = inverted
+    }
+
+    /// Cover something — a logo, a face, a name badge.
+    public static func hide(x: Rational, y: Rational, width: Rational, height: Rational,
+                            shape: Shape = .ellipse, feather: Rational = Rational(2, 100)) -> Mask {
+        Mask(shape: shape, x: x, y: y, width: width, height: height, feather: feather, inverted: true)
+    }
+}
+
 public struct ClipPlacement: Hashable, Sendable, Codable {
     /// Top-left of the clip as a fraction of output width/height. (0,0) is the frame's corner.
     public let x: Rational
     public let y: Rational
     /// Fraction of the output's width the clip spans. 1 = full width.
     public let width: Rational
-    /// 0…1 straight alpha, composited "over".
+    /// 0…1 straight alpha.
     public let opacity: Rational
+    /// Vertical scale as a fraction of the output's height. `nil` keeps the source's aspect ratio,
+    /// which is what almost every clip wants and what every existing document assumed.
+    public let height: Rational?
+    /// Clockwise, degrees, about the layer's centre.
+    public let rotation: Rational
+    /// Flip. Mirroring is a real edit — it is how a piece to camera shot on a front-facing phone is
+    /// made to read correctly, and how the same take is reused without it looking like the same take.
+    public let mirrorHorizontal: Bool
+    public let mirrorVertical: Bool
+    /// Fractions of the SOURCE trimmed from each side before anything else.
+    public let cropLeft: Rational, cropRight: Rational, cropTop: Rational, cropBottom: Rational
+    public let blend: BlendMode
+    public let mask: Mask?
 
-    public init(x: Rational, y: Rational, width: Rational, opacity: Rational = .one) {
+    public init(x: Rational, y: Rational, width: Rational, opacity: Rational = .one,
+                height: Rational? = nil, rotation: Rational = .zero,
+                mirrorHorizontal: Bool = false, mirrorVertical: Bool = false,
+                cropLeft: Rational = .zero, cropRight: Rational = .zero,
+                cropTop: Rational = .zero, cropBottom: Rational = .zero,
+                blend: BlendMode = .over, mask: Mask? = nil) {
         self.x = x; self.y = y; self.width = width; self.opacity = opacity
+        self.height = height; self.rotation = rotation
+        self.mirrorHorizontal = mirrorHorizontal; self.mirrorVertical = mirrorVertical
+        self.cropLeft = cropLeft; self.cropRight = cropRight
+        self.cropTop = cropTop; self.cropBottom = cropBottom
+        self.blend = blend; self.mask = mask
+    }
+
+    // Every field added after `opacity` decodes to its default when absent, so documents written
+    // before transforms existed still replay exactly as they did. A content-addressed document
+    // whose old revisions stop decoding is not an edit history, it is a liability.
+    private enum CodingKeys: String, CodingKey {
+        case x, y, width, opacity, height, rotation
+        case mirrorHorizontal, mirrorVertical
+        case cropLeft, cropRight, cropTop, cropBottom, blend, mask
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        x = try c.decode(Rational.self, forKey: .x)
+        y = try c.decode(Rational.self, forKey: .y)
+        width = try c.decode(Rational.self, forKey: .width)
+        opacity = try c.decodeIfPresent(Rational.self, forKey: .opacity) ?? .one
+        height = try c.decodeIfPresent(Rational.self, forKey: .height)
+        rotation = try c.decodeIfPresent(Rational.self, forKey: .rotation) ?? .zero
+        mirrorHorizontal = try c.decodeIfPresent(Bool.self, forKey: .mirrorHorizontal) ?? false
+        mirrorVertical = try c.decodeIfPresent(Bool.self, forKey: .mirrorVertical) ?? false
+        cropLeft = try c.decodeIfPresent(Rational.self, forKey: .cropLeft) ?? .zero
+        cropRight = try c.decodeIfPresent(Rational.self, forKey: .cropRight) ?? .zero
+        cropTop = try c.decodeIfPresent(Rational.self, forKey: .cropTop) ?? .zero
+        cropBottom = try c.decodeIfPresent(Rational.self, forKey: .cropBottom) ?? .zero
+        blend = try c.decodeIfPresent(BlendMode.self, forKey: .blend) ?? .over
+        mask = try c.decodeIfPresent(Mask.self, forKey: .mask)
     }
 
     /// Fill the frame — what a clip with no placement does.
@@ -79,6 +172,21 @@ public struct ClipPlacement: Hashable, Sendable, Codable {
     /// A corner inset, the common picture-in-picture case.
     public static func inset(width: Rational, margin: Rational) -> ClipPlacement {
         ClipPlacement(x: .one - width - margin, y: margin, width: width)
+    }
+
+    /// Flipped left-to-right, everything else unchanged.
+    public var mirrored: ClipPlacement {
+        ClipPlacement(x: x, y: y, width: width, opacity: opacity, height: height, rotation: rotation,
+                      mirrorHorizontal: !mirrorHorizontal, mirrorVertical: mirrorVertical,
+                      cropLeft: cropLeft, cropRight: cropRight, cropTop: cropTop, cropBottom: cropBottom,
+                      blend: blend, mask: mask)
+    }
+
+    public func masked(_ mask: Mask?) -> ClipPlacement {
+        ClipPlacement(x: x, y: y, width: width, opacity: opacity, height: height, rotation: rotation,
+                      mirrorHorizontal: mirrorHorizontal, mirrorVertical: mirrorVertical,
+                      cropLeft: cropLeft, cropRight: cropRight, cropTop: cropTop, cropBottom: cropBottom,
+                      blend: blend, mask: mask)
     }
 }
 
