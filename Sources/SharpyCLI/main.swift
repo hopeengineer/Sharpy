@@ -264,8 +264,16 @@ case "bench":
             for n in layerCounts {
                 let sources = try (0..<n).map { _ in try SequentialFrameSource(url: url) }
                 let w = sources[0].width, h = sources[0].height
-                let out = comp.makeOutputTexture(width: w, height: h)
-                let ids = withIDs ? comp.makeIDTexture(width: w, height: h) : nil
+                // A RING of output textures with several frames in flight.
+                //
+                // The previous version waited for the GPU after every frame, so decode and
+                // compositing ran strictly alternately and the pipeline paid both costs in series.
+                // At 1080p everything was fast enough to hide it; at real 4K it cost most of the
+                // throughput — 4 layers ran at 15.2 fps while decode alone measured 129 fps.
+                let depth = 3
+                let outs = (0..<depth).map { _ in comp.makeOutputTexture(width: w, height: h) }
+                let idTextures = withIDs ? (0..<depth).map { _ in comp.makeIDTexture(width: w, height: h) } : []
+                let inFlight = DispatchSemaphore(value: depth)
                 var placements: [LayerPlacement] = []
                 for i in 0..<n {
                     placements.append(i == 0 ? .full : LayerPlacement(offset: SIMD2(Float(i) * 300, Float(i) * 150), scale: 0.5, opacity: 0.8))
@@ -281,10 +289,17 @@ case "bench":
                         layers.append(CompositeLayer(pixelBuffer: f.pixelBuffer, placement: placements[i]))
                     }
                     if layers.count < n { break }
-                    let cb = try comp.encode(layers: layers, into: out, ids: ids)
-                    cb.commit(); cb.waitUntilCompleted()
+                    inFlight.wait()
+                    let slot = rendered % depth
+                    let cb = try comp.encode(layers: layers, into: outs[slot],
+                                             ids: withIDs ? idTextures[slot] : nil)
+                    cb.addCompletedHandler { _ in inFlight.signal() }
+                    cb.commit()
                     rendered += 1; frame += 1
                 }
+                // Drain: every frame counted must actually be finished, or the rate is a fiction.
+                for _ in 0..<depth { inFlight.wait() }
+                for _ in 0..<depth { inFlight.signal() }
                 let dt = Date().timeIntervalSince(t0)
                 let fps = Double(rendered) / dt
                 let gate = n == 4 ? (fps >= 30 ? "  ✓ GATE (>= 30 fps)" : "  ✗ GATE (< 30 fps)") : ""

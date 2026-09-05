@@ -143,7 +143,7 @@ public enum TakeSelector {
     /// it fails on the only case that matters: takes differ in precisely the words being judged.
     /// "the um hook goes here" and "the hook goes here" are the SAME LINE — that a filler is
     /// present in one is the finding, not a reason to treat them as different sentences.
-    static func similarity(_ a: [String], _ b: [String]) -> Double {
+    public static func similarity(_ a: [String], _ b: [String]) -> Double {
         guard !a.isEmpty, !b.isEmpty else { return 0 }
         var row = [Int](repeating: 0, count: b.count + 1)
         for i in 1...a.count {
@@ -157,15 +157,15 @@ public enum TakeSelector {
         return Double(row[b.count]) / Double(max(a.count, b.count))
     }
 
-    struct Line {
-        let take: Take
-        let text: String
-        let tokens: [String]
-        let range: TimeRange
-        let words: [Word]
+    public struct Line {
+        public let take: Take
+        public let text: String
+        public let tokens: [String]
+        public let range: TimeRange
+        public let words: [Word]
     }
 
-    static func lines(of take: Take) -> [Line] {
+    public static func lines(of take: Take) -> [Line] {
         take.transcript.segments().compactMap { segment in
             let tokens = key(segment.text).split(separator: " ").map(String.init)
             guard !tokens.isEmpty else { return nil }
@@ -290,7 +290,7 @@ public enum TakeSelector {
         return best.1 <= 0.001 ? "a near tie — any of these would do" : best.0
     }
 
-    static func score(words: [Word], range: TimeRange, take: Take,
+    public static func score(words: [Word], range: TimeRange, take: Take,
                       fillerPenalty: Double, stallSeconds: Double) -> Rendition {
         var notes: [String] = []
 

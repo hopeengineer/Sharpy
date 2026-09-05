@@ -59,6 +59,9 @@ public final class SequentialFrameSource: @unchecked Sendable {
     private var output: AVAssetReaderTrackOutput?
     private var current: DecodedFrame?
     private var exhausted = false
+    /// Presentation time of the previous sample, so a file with invalid sample durations can still
+    /// report its real cadence.
+    private var lastPresentation: TimeValue?
     private let lock = NSLock()
 
     /// - Parameter pixelFormat: NV12 (decoder-native for H.264/HEVC; measured fastest) or BGRA.
@@ -82,8 +85,21 @@ public final class SequentialFrameSource: @unchecked Sendable {
     public func frame(at time: TimeValue) throws -> DecodedFrame? {
         lock.lock(); defer { lock.unlock() }
         if let c = current, c.interval.contains(time) { return c }
-        // sequential step?
-        if let c = current, !(time < c.interval.end), time < c.interval.end + c.duration + c.duration {
+        // Sequential step, judged against a generous forward window.
+        //
+        // This was `c.duration + c.duration`, which assumes the reported frame duration is
+        // trustworthy. On the user's 4K phone recording it is not: the samples carry an INVALID
+        // duration (value 0, timescale 0), so the fallback used `nominalFrameRate`, which
+        // AVFoundation reported as 109.356 fps for a file that is exactly 30. The step window was
+        // therefore three times too narrow, every request fell outside it, and `frame(at:)` took
+        // the SEEK path — rebuilding an entire AVAssetReader per frame.
+        //
+        // It cost 16x: raw decode measures 696 fps on that file and this managed 43.
+        //
+        // Stepping forward is cheap and seeking is not, so the window is now a whole second of
+        // material. Overshooting it merely reads a few frames that get discarded; undershooting it
+        // rebuilds a reader, and those costs are nowhere near symmetric.
+        if let c = current, !(time < c.interval.end), time < c.interval.end + SequentialFrameSource.forwardStepWindow {
             while let n = try readNext() {
                 current = n
                 if n.interval.contains(time) { return n }
@@ -123,8 +139,12 @@ public final class SequentialFrameSource: @unchecked Sendable {
         let start = try time.cmTime()
         r.timeRange = CMTimeRange(start: start, end: .positiveInfinity)
         guard r.startReading() else { throw FrameSourceError.readerFailed(r.error?.localizedDescription ?? "startReading failed") }
-        reader = r; output = o; exhausted = false; current = nil
+        reader = r; output = o; exhausted = false; current = nil; lastPresentation = nil
     }
+
+    /// How far ahead a request may be and still be reached by reading forward. Generous on
+    /// purpose — see the note in `frame(at:)`.
+    static let forwardStepWindow = TimeValue(seconds: Rational(1, 1))
 
     private func readNext() throws -> DecodedFrame? {
         if exhausted { return nil }
@@ -137,7 +157,21 @@ public final class SequentialFrameSource: @unchecked Sendable {
         guard let pb = CMSampleBufferGetImageBuffer(sb) else { return try readNext() }
         let pts = TimeValue(CMSampleBufferGetPresentationTimeStamp(sb))
         let d = CMSampleBufferGetDuration(sb)
-        let dur = (d.isValid && d.value > 0) ? TimeValue(d) : TimeValue(seconds: nominalFrameRate.frameDuration)
+        // Duration, in order of how much the file actually knows:
+        //   1. the sample's own duration, when it has a valid one
+        //   2. the OBSERVED gap from the previous sample — the file's real cadence, which beats
+        //      any header field and is exact for variable-frame-rate material
+        //   3. nominalFrameRate, which on this machine reported 109.356 for a 30 fps recording and
+        //      is the least trustworthy of the three
+        let dur: TimeValue
+        if d.isValid && d.value > 0 {
+            dur = TimeValue(d)
+        } else if let previous = lastPresentation, previous < pts {
+            dur = pts - previous
+        } else {
+            dur = TimeValue(seconds: nominalFrameRate.frameDuration)
+        }
+        lastPresentation = pts
         return DecodedFrame(pixelBuffer: pb, presentation: pts, duration: dur)
     }
 }
