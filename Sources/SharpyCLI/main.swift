@@ -531,6 +531,32 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "layout":
+    // sharpy layout <reference> — what FORMAT is this edit?
+    //
+    // Reading structure off a reference, which a screenshot cannot show: how many panels, whether
+    // they carry the same content, which are held while others play, and how far apart the same
+    // delivery appears in each. That last one is the echo.
+    guard let path = argv.dropFirst().first else { fail("usage: sharpy layout <reference video>") }
+    do {
+        let seconds = Double(option("--seconds") ?? "30") ?? 30
+        let t0 = Date()
+        let analysis = try LayoutAnalyzer.analyse(url: URL(fileURLWithPath: path), maximumSeconds: seconds)
+        print(String(format: "analysed %.0f s in %.1f s", seconds, Date().timeIntervalSince(t0)))
+        print(analysis.summary)
+        let q = analysis.motionQuantiles
+        if !q.isEmpty {
+            print(String(format: "  motion spread: p10 %.5f  p25 %.5f  median %.5f  p75 %.5f  p90 %.5f",
+                         q[0], q[1], q[2], q[3], q[4]))
+            let all = analysis.activity.flatMap(\.motion)
+            let exactZero = all.filter { $0 < 1e-9 }.count
+            let tiny = all.filter { $0 < 1e-4 }.count
+            print(String(format: "  exactly zero: %d of %d (%.0f%%) · under 1e-4: %d (%.0f%%) · threshold chosen %.5f",
+                         exactZero, all.count, Double(exactZero) / Double(all.count) * 100,
+                         tiny, Double(tiny) / Double(all.count) * 100, analysis.motionThreshold))
+        }
+    } catch { fail("layout: \(error)") }
+
 case "takes":
     // sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov]
     //
@@ -912,6 +938,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy layout <reference>   — what format is this edit?
       sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov] [--codec h264|hevc|prores]
       sharpy enhance <file> --out <file.wav> [--preset studio|noisy]
       sharpy contrast <file> [--min 3.0]
