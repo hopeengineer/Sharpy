@@ -97,13 +97,14 @@ public final class MetalCompositor: @unchecked Sendable {
     }
 
     public init(device: MTLDevice? = MTLCreateSystemDefaultDevice(),
-                colorPipeline: ColorPipeline = .passthrough) throws {
+                colorPipeline: ColorPipeline = .passthrough,
+                look: EffectSpec? = nil) throws {
         guard let device else { throw CompositorError.noDevice }
         self.device = device
         self.colorPipeline = colorPipeline
         guard let q = device.makeCommandQueue() else { throw CompositorError.noDevice }
         queue = q
-        let source = MetalCompositor.shaderSource(colorPipeline)
+        let source = MetalCompositor.shaderSource(colorPipeline, look: look)
         let lib: MTLLibrary
         do { lib = try device.makeLibrary(source: source, options: nil) }
         catch { throw CompositorError.shaderCompile(String(describing: error)) }
@@ -215,7 +216,14 @@ public final class MetalCompositor: @unchecked Sendable {
     }
 
     /// The kernel, with OCIO's generated transforms specialised in.
-    static func shaderSource(_ pipeline: ColorPipeline) -> String { header + pipeline.mslPrelude + body }
+    static func shaderSource(_ pipeline: ColorPipeline, look: EffectSpec? = nil) -> String {
+        // The look sits AFTER blending and BEFORE the display transform, which is where a grade
+        // belongs: it works on composited light rather than on one layer, and it works in linear
+        // rather than on display code values. An agent-authored effect gets exactly the same place
+        // in the pipeline a hand-written one would, because there is no reason to give it a worse one.
+        let lookMSL = look?.msl ?? "static inline float3 SharpyLook(float3 c) { return c; }"
+        return header + pipeline.mslPrelude + lookMSL + "\n" + body
+    }
 
     static let header = """
     #include <metal_stdlib>
@@ -340,7 +348,8 @@ public final class MetalCompositor: @unchecked Sendable {
             rgb = mixed * la + rgb * (1.0 - la);
             a = la + a * (1.0 - la);
         }
-        // One display transform on the composited result.
+        // The look grades composited linear light, then one display transform.
+        rgb = SharpyLook(rgb);
         rgb = SharpyOutputTransform(float4(rgb, 1.0)).rgb;
         out.write(float4(saturate(rgb), a), gid);
         if (kEmitIDs) { ids.write(uint4(present, owner, 0u, 0u), gid); }
