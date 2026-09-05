@@ -199,15 +199,68 @@ public struct Clip: Hashable, Sendable, Codable {
     /// Where it sits in the frame. `nil` means fit the whole frame, which is what every clip did
     /// before placement existed and remains the default so old documents decode unchanged.
     public let placement: ClipPlacement?
-    public var end: TimeValue { start + source.duration }
+    /// How long the clip occupies the TIMELINE, when that differs from how much source it uses.
+    ///
+    /// `nil` means they match — normal speed, which is what every clip did before retiming existed.
+    /// Set it and the source is sampled proportionally, which covers three things editors treat as
+    /// separate and which are one operation:
+    ///
+    ///   longer than the source   slow motion
+    ///   shorter                  speed up
+    ///   a one-frame source held  FREEZE FRAME
+    ///
+    /// A freeze is not a special case here, and that matters: the split-screen trend where three
+    /// bands take turns talking is entirely freezes, and a design that treated them as a separate
+    /// feature would have to special-case the most common thing people do.
+    public let timelineDuration: TimeValue?
+    /// Uses the TIMELINE span, not the source duration. A retimed clip occupies the timeline for
+    /// as long as it plays, and getting this wrong makes every overlap check, ripple delete and
+    /// timeline duration silently incorrect for any clip that is not at normal speed.
+    public var end: TimeValue { start + timelineSpan }
     public var range: TimeRange { TimeRange(start: start, end: end) }
-    public init(asset: NodeID, source: TimeRange, start: TimeValue, placement: ClipPlacement? = nil) {
-        self.asset = asset; self.source = source; self.start = start; self.placement = placement
+    public init(asset: NodeID, source: TimeRange, start: TimeValue,
+                placement: ClipPlacement? = nil, timelineDuration: TimeValue? = nil) {
+        self.asset = asset; self.source = source; self.start = start
+        self.placement = placement; self.timelineDuration = timelineDuration
     }
 
     /// The same clip somewhere else in the frame.
     public func placed(_ placement: ClipPlacement?) -> Clip {
-        Clip(asset: asset, source: source, start: start, placement: placement)
+        Clip(asset: asset, source: source, start: start,
+             placement: placement, timelineDuration: timelineDuration)
+    }
+
+    /// Held on one frame for `duration` — the freeze.
+    public static func freeze(asset: NodeID, at instant: TimeValue, frameDuration: TimeValue,
+                              start: TimeValue, duration: TimeValue,
+                              placement: ClipPlacement? = nil) -> Clip {
+        Clip(asset: asset,
+             source: TimeRange(start: instant, end: instant + frameDuration),
+             start: start, placement: placement, timelineDuration: duration)
+    }
+
+    /// How much timeline the clip occupies.
+    public var timelineSpan: TimeValue { timelineDuration ?? source.duration }
+
+    /// Playback rate: 1 is normal, 2 is double speed, 0 is a freeze.
+    public var speed: Rational {
+        let span = timelineSpan.seconds
+        return span == .zero ? .zero : source.duration.seconds / span
+    }
+
+    /// The instant of SOURCE shown at a timeline instant inside this clip.
+    ///
+    /// The one place retiming is interpreted. Every caller went through
+    /// `source.start + (t - start)` before, which silently ignores retiming — so this exists to
+    /// make the retimed case impossible to forget rather than merely documented.
+    public func sourceTime(at t: TimeValue) -> TimeValue {
+        let offset = t - start
+        guard let timelineDuration, timelineDuration.seconds != .zero,
+              timelineDuration != source.duration else {
+            return source.start + offset
+        }
+        let fraction = offset.seconds / timelineDuration.seconds
+        return source.start + TimeValue(seconds: source.duration.seconds * fraction)
     }
 }
 
@@ -674,7 +727,7 @@ extension Document {
     public func videoClip(at t: TimeValue) -> (trackIndex: Int, clip: Clip, sourceTime: TimeValue)? {
         for (i, track) in timeline.tracks.enumerated().reversed() where track.kind == .video {
             if let clip = track.clips.first(where: { $0.range.contains(t) }) {
-                return (i, clip, clip.source.start + (t - clip.start))
+                return (i, clip, clip.sourceTime(at: t))
             }
         }
         return nil
@@ -685,7 +738,7 @@ extension Document {
     public func audioClips(at t: TimeValue) -> [(trackIndex: Int, clip: Clip, sourceTime: TimeValue)] {
         timeline.tracks.enumerated().compactMap { (i, track) in
             guard track.kind == .audio, let clip = track.clips.first(where: { $0.range.contains(t) }) else { return nil }
-            return (i, clip, clip.source.start + (t - clip.start))
+            return (i, clip, clip.sourceTime(at: t))
         }
     }
 

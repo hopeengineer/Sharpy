@@ -29,7 +29,7 @@ extension Document {
     public func resolveVideo(at t: TimeValue) -> [ResolvedLayer] {
         timeline.tracks.enumerated().compactMap { (i, track) in
             guard track.kind == .video, let clip = track.clips.first(where: { $0.range.contains(t) }) else { return nil }
-            return ResolvedLayer(trackIndex: i, clip: clip, sourceTime: clip.source.start + (t - clip.start))
+            return ResolvedLayer(trackIndex: i, clip: clip, sourceTime: clip.sourceTime(at: t))
         }
     }
 }
@@ -164,7 +164,7 @@ public final class RenderSession {
             for clip in track.clips where clip.range.overlaps(chunkRange) {
                 guard let hit = clip.range.intersection(chunkRange) else { continue }
                 let src = try audioSource(for: clip.asset)
-                let sourceStart = clip.source.start + (hit.start - clip.start)
+                let sourceStart = clip.sourceTime(at: hit.start)
                 let samples = try src.read(TimeRange(start: sourceStart, duration: hit.duration))
                 let offset = Int(((hit.start - chunkRange.start).seconds * Rational(Int64(sr))).rounded) * ch
                 guard offset >= 0, offset < mix.count else { continue }
