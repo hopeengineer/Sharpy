@@ -33,19 +33,26 @@ public struct LayerPlacement: Sendable, Equatable {
     /// 0 rectangle · 1 ellipse
     public var maskShape: UInt32
     public var maskInverted: Bool
+    /// Use the texture's own ALPHA, not just the layer opacity.
+    ///
+    /// Off for video, which is opaque and where reading a fourth channel would cost for nothing.
+    /// On for overlays — text, badges, graphics — which are mostly transparent and composite as a
+    /// solid rectangle without it.
+    public var usesAlpha: Bool
 
     public init(offset: SIMD2<Float> = .zero, scale: Float = 1, scaleY: Float? = nil,
                 opacity: Float = 1, rotation: Float = 0,
                 mirrorX: Bool = false, mirrorY: Bool = false,
                 crop: SIMD4<Float> = .zero, blend: UInt32 = 0,
                 maskRect: SIMD4<Float> = .zero, maskFeather: Float = 0,
-                maskShape: UInt32 = 0, maskInverted: Bool = false) {
+                maskShape: UInt32 = 0, maskInverted: Bool = false, usesAlpha: Bool = false) {
         self.offset = offset; self.scale = scale; self.scaleY = scaleY
         self.opacity = opacity; self.rotation = rotation
         self.mirrorX = mirrorX; self.mirrorY = mirrorY
         self.crop = crop; self.blend = blend
         self.maskRect = maskRect; self.maskFeather = maskFeather
         self.maskShape = maskShape; self.maskInverted = maskInverted
+        self.usesAlpha = usesAlpha
     }
     public static let full = LayerPlacement()
 }
@@ -94,6 +101,7 @@ public final class MetalCompositor: @unchecked Sendable {
         var maskFeather: Float = 0
         var maskShape: UInt32 = 0
         var maskInverted: UInt32 = 0
+        var usesAlpha: UInt32 = 0
     }
 
     public init(device: MTLDevice? = MTLCreateSystemDefaultDevice(),
@@ -193,7 +201,8 @@ public final class MetalCompositor: @unchecked Sendable {
                 mirror: SIMD2(pl.mirrorX ? -1 : 1, pl.mirrorY ? -1 : 1),
                 crop: pl.crop, blend: pl.blend,
                 maskRect: pl.maskRect, maskFeather: pl.maskFeather,
-                maskShape: pl.maskShape, maskInverted: pl.maskInverted ? 1 : 0))
+                maskShape: pl.maskShape, maskInverted: pl.maskInverted ? 1 : 0,
+                usesAlpha: pl.usesAlpha ? 1 : 0))
         }
         for i in layers.count..<MetalCompositor.maxLayers { plane0[i] = plane0[0] ?? output; plane1[i] = plane1[0] ?? output }
         while uniforms.count < MetalCompositor.maxLayers { uniforms.append(LayerUniform(offset: .zero, scale: 1, opacity: 0, srcSize: .one, isBGRA: 1, matrix: 0)) }
@@ -236,6 +245,7 @@ public final class MetalCompositor: @unchecked Sendable {
         float2 offset; float scale; float opacity; float2 srcSize; uint isBGRA; uint matrix;
         float scaleY; float cosR; float sinR; float2 mirror; float4 crop;
         uint blend; float4 maskRect; float maskFeather; uint maskShape; uint maskInverted;
+        uint usesAlpha;
     };
 
     // Mask coverage in 0…1, in LAYER-relative coordinates. Feathered with smoothstep so an edge is
@@ -332,10 +342,20 @@ public final class MetalCompositor: @unchecked Sendable {
             if (coverage <= 0.0) continue;
             float2 p = float2(L.srcSize.x * L.crop.x, L.srcSize.y * L.crop.z) + inLayer;
             float2 uv = p / L.srcSize;
-            float3 c = (L.isBGRA == 1) ? p0[i].sample(s, uv).rgb : toRGB(p0[i].sample(s, uv).r, p1[i].sample(s, uv).rg, L.isBGRA == 2 ? 1u : 0u, L.matrix);
+            float4 sampled = p0[i].sample(s, uv);
+            float3 c = (L.isBGRA == 1) ? sampled.rgb : toRGB(sampled.r, p1[i].sample(s, uv).rg, L.isBGRA == 2 ? 1u : 0u, L.matrix);
+            // Overlays arrive PREMULTIPLIED, which is what CoreGraphics produces. Un-premultiply
+            // before the colour transform, or the transform is applied to colours already faded
+            // toward black and every soft edge grades wrongly.
+            float texAlpha = 1.0;
+            if (L.usesAlpha == 1u) {
+                texAlpha = sampled.a;
+                if (texAlpha <= 0.0001) continue;
+                c /= texAlpha;
+            }
             // Into the linear working space before blending: light adds, display code values do not.
             c = SharpyInputTransform(float4(c, 1.0)).rgb;
-            float la = L.opacity * coverage;
+            float la = L.opacity * coverage * texAlpha;
             if (kEmitIDs && la > 0.0) {
                 present |= (1u << i);
                 // Every layer already composited is attenuated by this one. Tracking the survivor
