@@ -541,11 +541,26 @@ case "takes":
             let ref = AssetRef(contentHash: try MediaFingerprint(of: url).hex, path: path,
                                duration: src.duration, frameRate: src.nominalFrameRate,
                                hasVideo: true, hasAudio: audio != nil)
+            // The audio source is what lets the assembler choose by how the joins SOUND rather
+            // than line by line. Without it the choice falls back to per-line quality, which is
+            // the thing that produces individually good takes that butt together badly.
             let (log, report) = try Assembler.assemble(found, asset: ref,
-                                                       frameRate: src.nominalFrameRate)
+                                                       frameRate: src.nominalFrameRate,
+                                                       audio: try? AudioSource(url: url, sampleRate: 48_000, channels: 1))
             print(report.summary)
+            // h264 by default, not ProRes. An assembly is something to WATCH and judge, not a
+            // master: 304 s of 4K ProRes is 77.5 GB and the disk guard rightly refuses it, while
+            // the same cut in h264 is a couple of gigabytes and looks identical for the purpose.
+            let assembleCodec: RenderCodec = {
+                switch option("--codec") ?? "h264" {
+                case "prores": return .proRes422HQ
+                case "hevc": return .hevc(bitrate: src.width * src.height * 4)
+                default: return .h264(bitrate: src.width * src.height * 6)
+                }
+            }()
             let session = try RenderSession(document: log.head,
                                             options: RenderOptions(width: src.width, height: src.height,
+                                                                   codec: assembleCodec,
                                                                    sampleRate: 48_000))
             let rendered = try session.render(to: URL(fileURLWithPath: out))
             print(String(format: "rendered %d frames in %.1f s = %.0f fps → %@",
@@ -871,7 +886,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
-      sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov]
+      sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov] [--codec h264|hevc|prores]
       sharpy enhance <file> --out <file.wav> [--preset studio|noisy]
       sharpy contrast <file> [--min 3.0]
       sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X]
