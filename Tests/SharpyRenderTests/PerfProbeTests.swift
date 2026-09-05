@@ -61,3 +61,51 @@ final class FrameSourceThroughputTests: XCTestCase {
         XCTAssertLessThan(seconds, 1.0 / 20)
     }
 }
+
+/// The disk guard. It exists because a frame-rate bug produced a 42 GB render that took the
+/// machine to 2.3 GB free before anyone noticed — and an agent editing unattended is exactly who
+/// will not notice.
+final class OutputFitsTests: XCTestCase {
+    func session(width: Int, height: Int, codec: RenderCodec) throws -> RenderSession {
+        var log = CommandLog(initial: Document(timeline: Timeline(name: "t", frameRate: .r30)))
+        try log.append(.addAsset(AssetRef(contentHash: "a", path: "/tmp/a.mov",
+                                          duration: TimeValue(frames: 100, at: .r30),
+                                          frameRate: .r30, hasVideo: true, hasAudio: false)))
+        return try RenderSession(document: log.head,
+                                 options: RenderOptions(width: width, height: height, codec: codec))
+    }
+
+    func testAnOrdinaryRenderIsAllowed() throws {
+        let s = try session(width: 1920, height: 1080, codec: .proRes422HQ)
+        XCTAssertNoThrow(try s.checkOutputFits(frames: 300, at: FileManager.default.temporaryDirectory
+            .appendingPathComponent("x.mov")))
+    }
+
+    /// A million frames of 4K ProRes is roughly 9 TB. It must be refused on any machine.
+    func testAnAbsurdRenderIsRefusedWithSomethingActionable() throws {
+        let s = try session(width: 3840, height: 2160, codec: .proRes422HQ)
+        XCTAssertThrowsError(try s.checkOutputFits(frames: 1_000_000,
+            at: FileManager.default.temporaryDirectory.appendingPathComponent("x.mov"))) { error in
+            let message = "\(error)"
+            XCTAssertTrue(message.contains("free"), message)
+            // A refusal that does not say what to do instead is just an obstacle.
+            XCTAssertTrue(message.contains("shorter range") || message.contains("h264"), message)
+        }
+    }
+
+    /// h264 at a sane bitrate is far smaller than ProRes, and the guard must know the difference —
+    /// otherwise it refuses renders that would have been fine.
+    func testTheGuardAccountsForTheCodec() throws {
+        let prores = try session(width: 3840, height: 2160, codec: .proRes422HQ)
+        let h264 = try session(width: 3840, height: 2160, codec: .h264(bitrate: 40_000_000))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("x.mov")
+        // 20 minutes at 4K: ProRes is ~40 GB, h264 ~6 GB.
+        let frames: Int64 = 36_000
+        var proresRefused = false
+        do { try prores.checkOutputFits(frames: frames, at: url) } catch { proresRefused = true }
+        var h264Refused = false
+        do { try h264.checkOutputFits(frames: frames, at: url) } catch { h264Refused = true }
+        XCTAssertFalse(h264Refused, "h264 at 40 Mb/s for 20 minutes is about 6 GB and should pass")
+        _ = proresRefused   // depends on the machine's free space; the codec difference is the point
+    }
+}

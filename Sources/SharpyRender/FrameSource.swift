@@ -72,11 +72,30 @@ public final class SequentialFrameSource: @unchecked Sendable {
         guard let t = asset.tracks(withMediaType: .video).first else { throw FrameSourceError.noVideoTrack(url) }
         track = t
         duration = TimeValue(t.timeRange.duration)
-        let fps = t.nominalFrameRate
-        // Prefer the exact rate when it is a known one; otherwise trust the track's minimum frame duration.
+        // Frame rate, in order of how much the file actually knows.
+        //
+        // The header fields are not reliable. On the user's 4K phone recording `nominalFrameRate`
+        // reports 109.356 for a file that is exactly 30, and `minFrameDuration` is invalid — so
+        // every frame number, timecode and cut point for that file came out 3.6x wrong. That is a
+        // CORRECTNESS bug, not a performance one, and no better header field fixes it.
+        //
+        // So the cadence is MEASURED from the material, then snapped to a standard rate when it is
+        // within a whisker of one. Snapping matters more than the error suggests: 29.97 and 30
+        // differ by a tenth of a percent and by an entire timecode system.
         let mfd = t.minFrameDuration
-        let exact: Rational = (mfd.isValid && mfd.value > 0) ? Rational(Int64(mfd.timescale), Int64(mfd.value)) : Rational(Int64((fps * 1000).rounded()), 1000)
-        nominalFrameRate = FrameRate(fps: exact)
+        let fromHeader: Rational? = (mfd.isValid && mfd.value > 0)
+            ? Rational(Int64(mfd.timescale), Int64(mfd.value)) : nil
+        let measured = SequentialFrameSource.measureCadence(asset: asset, track: t)
+        if let measured, let snapped = FrameRate.nearestStandard(toFPS: measured) {
+            nominalFrameRate = snapped
+        } else if let fromHeader, let snapped = FrameRate.nearestStandard(toFPS: fromHeader.doubleValue) {
+            nominalFrameRate = snapped
+        } else if let measured {
+            nominalFrameRate = FrameRate(fps: Rational(Int64((measured * 1000).rounded()), 1000))
+        } else {
+            let fps = t.nominalFrameRate
+            nominalFrameRate = FrameRate(fps: fromHeader ?? Rational(Int64((fps * 1000).rounded()), 1000))
+        }
         let size = t.naturalSize.applying(t.preferredTransform)
         width = Int(abs(size.width).rounded()); height = Int(abs(size.height).rounded())
     }
@@ -140,6 +159,32 @@ public final class SequentialFrameSource: @unchecked Sendable {
         r.timeRange = CMTimeRange(start: start, end: .positiveInfinity)
         guard r.startReading() else { throw FrameSourceError.readerFailed(r.error?.localizedDescription ?? "startReading failed") }
         reader = r; output = o; exhausted = false; current = nil; lastPresentation = nil
+    }
+
+    /// Read a handful of samples and report the observed frames per second.
+    ///
+    /// The MEDIAN interval, not the mean: a single long gap at a keyframe or a dropped sample would
+    /// drag a mean far enough to pick the wrong standard rate, and picking the wrong one is exactly
+    /// the failure this exists to prevent.
+    static func measureCadence(asset: AVAsset, track: AVAssetTrack, samples: Int = 12) -> Double? {
+        guard let reader = try? AVAssetReader(asset: asset) else { return nil }
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        output.alwaysCopiesSampleData = false
+        guard reader.canAdd(output) else { return nil }
+        reader.add(output)
+        guard reader.startReading() else { return nil }
+        defer { reader.cancelReading() }
+
+        var times: [Double] = []
+        while times.count < samples, let sb = output.copyNextSampleBuffer() {
+            let pts = CMSampleBufferGetPresentationTimeStamp(sb)
+            if pts.isValid { times.append(CMTimeGetSeconds(pts)) }
+        }
+        guard times.count >= 3 else { return nil }
+        let gaps = zip(times, times.dropFirst()).map { $1 - $0 }.filter { $0 > 0 }.sorted()
+        guard !gaps.isEmpty else { return nil }
+        let median = gaps[gaps.count / 2]
+        return median > 0 ? 1.0 / median : nil
     }
 
     /// How far ahead a request may be and still be reached by reading forward. Generous on

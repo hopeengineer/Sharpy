@@ -27,6 +27,27 @@ public struct FrameRate: Hashable, Sendable, Codable, CustomStringConvertible {
     public static let ntsc60DF = FrameRate(fps: Rational(60000, 1001), dropFrame: true)
     public static let r60 = FrameRate(fps: Rational(60))
 
+    /// Every rate the industry actually uses, for snapping a measured cadence to.
+    public static let standards: [FrameRate] = [film24, ntsc24, pal25, ntsc30, r30, pal50, ntsc60, r60]
+
+    /// The standard rate a measured cadence is, when it is one.
+    ///
+    /// Measured frame intervals are never exactly 1/30: encoders round presentation times, and a
+    /// 30 fps file can measure 30.09. Snapping matters far more than the small error suggests —
+    /// 29.97 and 30 differ by a tenth of a percent and by a whole timecode SYSTEM, and picking the
+    /// wrong one puts every timecode in the piece progressively out.
+    ///
+    /// Nothing is snapped beyond `tolerance`; a genuinely odd rate stays odd rather than being
+    /// forced into a standard it is not.
+    public static func nearestStandard(toFPS measured: Double, tolerance: Double = 0.02) -> FrameRate? {
+        var best: (FrameRate, Double)?
+        for candidate in standards {
+            let error = abs(candidate.fps.doubleValue - measured) / candidate.fps.doubleValue
+            if error <= tolerance, error < (best?.1 ?? .infinity) { best = (candidate, error) }
+        }
+        return best?.0
+    }
+
     /// Duration of one frame in seconds, exact.
     public var frameDuration: Rational { Rational(fps.den, fps.num) }
 

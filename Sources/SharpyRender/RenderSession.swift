@@ -85,6 +85,7 @@ public struct RenderReport: Sendable {
 
 public enum RenderError: Error, CustomStringConvertible {
     case writerFailed(String), poolFailed, missingAsset(NodeID), noFrame(asset: String, at: TimeValue)
+    case wouldNotFit(estimateBytes: Int64, availableBytes: Int64)
     case refusedByAssertions(VerificationResult)
     public var description: String {
         switch self {
@@ -92,6 +93,11 @@ public enum RenderError: Error, CustomStringConvertible {
         case .poolFailed: return "pixel buffer pool creation failed"
         case .missingAsset(let id): return "document references missing asset \(id)"
         case .noFrame(let a, let t): return "no frame in \(a) at \(t)"
+        case .wouldNotFit(let estimate, let available):
+            let gb = { (b: Int64) in String(format: "%.1f GB", Double(b) / 1_073_741_824) }
+            return "this render is estimated at \(gb(estimate)) and only \(gb(available)) is free. "
+                 + "Render a shorter range, choose h264/hevc instead of ProRes, or free some space. "
+                 + "Refusing rather than filling the disk."
         case .refusedByAssertions(let r):
             let lines = (r.blocking + r.holds).map { "  " + $0.description }.joined(separator: "\n")
             return "render refused — \(r.summary)\n\(lines)"
@@ -266,6 +272,35 @@ public final class RenderSession {
     /// mix as it stands. When a target is set, normalisation will meet it — so the check is run
     /// against the post-normalisation intent rather than blocking a render that would have fixed
     /// itself. Anything else would make `--loudness` and verification mutually exclusive.
+    /// Refuse a render that cannot fit.
+    ///
+    /// This exists because it happened. A frame-rate bug made a 10-minute source look like 71,475
+    /// frames instead of 19,608, and the resulting 4K ProRes render reached 42 GB and took the
+    /// machine down to 2.3 GB free before anybody noticed. The frame-rate bug is fixed; the reason
+    /// to keep this is that an agent editing unattended is exactly who will not notice.
+    ///
+    /// The estimate is deliberately crude — bytes per frame times frames — because the point is to
+    /// catch the case that is wrong by an order of magnitude, not to predict a file size.
+    public func checkOutputFits(frames: Int64, at url: URL) throws {
+        guard frames > 0 else { return }
+        let bytesPerFrame: Double = {
+            let pixels = Double(options.width * options.height)
+            switch options.codec {
+            case .proRes422HQ: return pixels * 1.1        // ~0.55 bytes/pixel at 4:2:2 10-bit
+            case .h264(let bitrate), .hevc(let bitrate): return Double(bitrate) / 8 / 30
+            }
+        }()
+        let estimate = bytesPerFrame * Double(frames)
+        let directory = url.deletingLastPathComponent()
+        guard let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+              let available = values.volumeAvailableCapacityForImportantUsage else { return }
+        // Four fifths, so a render that just fits still leaves the machine usable.
+        let budget = Double(available) * 0.8
+        if estimate > budget {
+            throw RenderError.wouldNotFit(estimateBytes: Int64(estimate), availableBytes: available)
+        }
+    }
+
     public func render(to url: URL) throws -> RenderReport {
         if !options.skipVerification {
             let context = VerificationContext(document: document, integratedLoudness: nil, truePeak: nil,
@@ -278,6 +313,7 @@ public final class RenderSession {
         let range = options.range ?? full
         let firstFrame = range.start.frame(at: rate)
         let endFrame = range.end.frame(at: rate) + (range.end.isFrameAligned(at: rate) ? 0 : 1)
+        try checkOutputFits(frames: endFrame - firstFrame, at: url)
 
         try? FileManager.default.removeItem(at: url)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
