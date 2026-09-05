@@ -490,6 +490,21 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "enhance":
+    // sharpy enhance <file> --out <file.wav> [--preset studio|noisy] [--isolation 0..1]
+    // Room → studio, using audio units already on the machine. Measured, not asserted.
+    guard let path = argv.dropFirst().first, let outPath = option("--out") else {
+        fail("usage: sharpy enhance <file> --out <file.wav> [--preset studio|noisy] [--isolation 0.75]")
+    }
+    do {
+        var settings: VoiceEnhancement = (option("--preset") ?? "studio") == "noisy" ? .noisyRoom : .studio
+        if let i = option("--isolation").flatMap({ Double($0) }) { settings.isolation = max(0, min(1, i)) }
+        let report = try VoiceEnhancer(settings: settings)
+            .enhance(url: URL(fileURLWithPath: path), to: URL(fileURLWithPath: outPath))
+        print(report.description)
+        if !report.improved { exit(1) }
+    } catch { fail("enhance: \(error)") }
+
 case "contrast":
     // sharpy contrast <file> [--min 3.0]
     // Can the on-screen text actually be read? Safe-area and duration checks ask where text is and
@@ -793,6 +808,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy enhance <file> --out <file.wav> [--preset studio|noisy]
       sharpy contrast <file> [--min 3.0]
       sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X]
       sharpy transcribe-batch <dir> --out <dir> --engine apple|whisper|parakeet
