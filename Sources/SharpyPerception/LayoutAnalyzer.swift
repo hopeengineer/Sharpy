@@ -55,6 +55,18 @@ public struct LayoutAnalysis: Sendable {
     public let offsets: [Double?]
     public let sampledAt: [Double]
     public let secondsPerSample: Double
+    /// Whether panels RESUME where they stopped, or cut to somewhere else.
+    ///
+    /// The distinction a viewer feels and cannot name, and it is measurable rather than something
+    /// to be told: a panel that pauses and carries on shows almost the same picture either side of
+    /// its freeze — a hand stops mid-gesture and completes it seconds later. A panel that cuts
+    /// shows a different moment, and the picture jumps.
+    ///
+    /// It decides the whole construction: assembled as cuts, each return would restart the panel
+    /// somewhere arbitrary and every gesture would break.
+    public let resumesAfterFreeze: Bool?
+    /// How alike the picture is either side of a freeze, averaged. 1 is a perfect resume.
+    public let resumeSimilarity: Double?
 
     /// All panels moving at once, which is the echo opening rather than the sequential body.
     public var simultaneousFraction: Double {
@@ -193,6 +205,14 @@ public struct LayoutAnalysis: Sendable {
             }
             let average = sequence.reduce(0.0) { $0 + $1.seconds } / Double(sequence.count)
             lines.append(String(format: "  each turn lasts %.1f s on average", average))
+        }
+        if let resumes = resumesAfterFreeze, let score = resumeSimilarity {
+            lines.append(resumes
+                ? String(format: "  PAUSE, NOT CUT: a panel resumes where it stopped (%.1f%% identical across its freeze). "
+                         + "Each panel is ONE continuous take being paused and unpaused, so a gesture stops mid-air and "
+                         + "finishes seconds later. Assembling it as separate clips would break every gesture.", score * 100)
+                : String(format: "  CUTS: panels jump to a different moment after a freeze (only %.1f%% identical), "
+                         + "so each turn is its own clip rather than a paused take.", score * 100))
         }
         if let opening = simultaneousOpening {
             lines.append(String(format: "  OPENING: all %d panels run together for the first %.1f s, then they take turns — "
@@ -361,7 +381,8 @@ public enum LayoutAnalyzer {
         }
         guard times.count > 4 else {
             return LayoutAnalysis(motionThreshold: 0, panels: 1, stacked: true, panelSimilarity: 0,
-                                  activity: [], offsets: [], sampledAt: times, secondsPerSample: interval)
+                                  activity: [], offsets: [], sampledAt: times, secondsPerSample: interval,
+                                  resumesAfterFreeze: nil, resumeSimilarity: nil)
         }
 
         // The split whose bands are most alike is the one the editor used.
@@ -381,6 +402,30 @@ public enum LayoutAnalyzer {
                 if similarity > best.similarity { best = (n, isStacked, similarity, frames) }
             }
         }
+
+        // Does a panel carry on from where it stopped, or jump somewhere else?
+        //
+        // Compare the picture just before a freeze with the picture just after it ends. Nearly the
+        // same means it resumed; different means it cut. Averaged over every freeze in the piece,
+        // because one comparison could be a coincidence.
+        var resumeScores: [Double] = []
+        for panel in 0..<best.panels {
+            var frozenSince: Int?
+            for i in 1..<best.sigs.count {
+                let moved = distance(best.sigs[i][panel], best.sigs[i - 1][panel])
+                let still = moved < 1e-4
+                if still, frozenSince == nil { frozenSince = i - 1 }
+                if !still, let since = frozenSince {
+                    // Long enough to be a deliberate hold rather than a quiet moment.
+                    if i - since >= 3 {
+                        resumeScores.append(1 - distance(best.sigs[since][panel], best.sigs[i][panel]))
+                    }
+                    frozenSince = nil
+                }
+            }
+        }
+        let resumeSimilarity = resumeScores.isEmpty ? nil
+            : resumeScores.reduce(0, +) / Double(resumeScores.count)
 
         // Motion per panel over time.
         var rawMotion: [[Double]] = []
@@ -410,6 +455,8 @@ public enum LayoutAnalyzer {
 
         return LayoutAnalysis(motionThreshold: threshold, panels: best.panels, stacked: best.stacked,
                               panelSimilarity: best.similarity, activity: activity,
-                              offsets: offsets, sampledAt: times, secondsPerSample: interval)
+                              offsets: offsets, sampledAt: times, secondsPerSample: interval,
+                              resumesAfterFreeze: resumeSimilarity.map { $0 > 0.985 },
+                              resumeSimilarity: resumeSimilarity)
     }
 }

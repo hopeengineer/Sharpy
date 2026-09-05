@@ -531,6 +531,19 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "corrections":
+    // sharpy corrections <file> — the half-lines that were restarted, and should be cut.
+    guard let path = argv.dropFirst().first else { fail("usage: sharpy corrections <file>") }
+    do {
+        guard #available(macOS 26.0, *) else { fail("corrections needs macOS 26") }
+        let url = URL(fileURLWithPath: path)
+        let transcript = try await2 {
+            try await ParakeetIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
+        }
+        let report = SelfCorrectionFinder.find(in: transcript)
+        print(report.summary)
+    } catch { fail("corrections: \(error)") }
+
 case "script":
     // sharpy script <script.txt> <video>  — where each scripted cut actually falls
     let args = Array(argv.dropFirst())
@@ -1022,6 +1035,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy corrections <file>              — restarted half-lines to cut
       sharpy script <script.txt> <video>     — where each scripted cut falls
       sharpy match <reference> <your video>  — work out the edit from both, unaided
       sharpy sections <file> [--count 3]  — where it changes subject, and what to call each part
