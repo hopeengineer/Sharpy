@@ -278,3 +278,27 @@ from a stumble.
 
 Still open: the model is 2/6 at finding fumbles unaided, so it adds nothing to detection. Every
 veto is recorded and reviewable rather than applied silently.
+
+### The three-panel edit now renders
+
+`sharpy assemble <script.txt> <video> --out <file.mov>` builds it: one track per panel, the
+speaking panel playing forward, the others held on the frame they stopped at, audio following
+whoever is talking. On the user's recording — 88.5 s, 2655 frames, 13 beats, all three bands
+carrying picture.
+
+What it does correctly: bands centre on the measured face (28% down this recording) rather than
+the middle of the frame; times snap to the video grid where the plan is made, so the plan printed
+and the file rendered are the same edit; a band that never got a clip is detected as blank rather
+than passing as "reframed".
+
+What is still open:
+
+- **The opening's echo cannot be measured from this reference.** Three attempts, all reported:
+  panel motion correlation (nothing can beat "no shift" by a fifth when panels are 94% alike),
+  panel picture correlation (no minimum), audio autocorrelation (returned its own search floor at
+  4.35× strength — an artefact, now refused). The likely reason is that the reference shot its
+  panels as separate takes, which cannot be recovered from one delayed take. `--echo <seconds>`
+  sets it, and it says so rather than inventing a number.
+- One scripted line — "Second: instruction files." — still does not locate in the recording.
+- 8.7 fps rendering three panels, against 366 fps measured at four layers. The freezes are seeking
+  backwards and rebuilding the reader; not yet investigated.

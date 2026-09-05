@@ -396,3 +396,20 @@ table in [`docs/PLAN.md`](docs/PLAN.md).
 
 - [`docs/PLAN.md`](docs/PLAN.md) — the plan, every measurement, and the milestone gates
 - [`bench/`](bench/) — benchmark scripts and raw results, reproducible on any Apple silicon Mac
+
+### Reading a transcript for meaning
+
+`sharpy-reason <video> --adjudicate` has the local model judge the stretches the measurement found;
+`--calibrate` scores it on twelve cases whose answer is known, which is the part that matters. Asked
+as a yes/no question it answered CUT on all twelve — 50%, exactly what always-cut scores. Asked to
+choose between two alternatives described in equal detail, with the option order swapped between
+passes, wrongly-cut keepers fell from six to one. It may veto a proposed cut and never propose one,
+and it does not overrule a retry that lands inside a second: the basis hierarchy already ranks
+measurement above inference.
+
+### Assembling a stacked edit
+
+`sharpy assemble <script.txt> <video> --out <file.mov> [--panels 3] [--echo 0.5]` renders the format
+where several panels take turns and the silent ones freeze mid-gesture. Bands centre on the measured
+face; every band is checked for picture, because a panel that got no clip renders black and looks
+deliberate.
