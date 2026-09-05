@@ -505,6 +505,54 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "takes":
+    // sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov]
+    //
+    // Find the attempts inside one recording, pick the best of each, and optionally cut it.
+    guard let path = argv.dropFirst().first else {
+        fail("usage: sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble <out.mov>]")
+    }
+    do {
+        guard #available(macOS 26.0, *) else { fail("takes needs macOS 26") }
+        let url = URL(fileURLWithPath: path)
+        let store = try IndexStore()
+        let asset = NodeID(contentOf: path)
+        let engine = option("--engine") ?? "parakeet"
+        let t0 = Date()
+        let transcript: Transcript
+        switch engine {
+        case "voted":   transcript = try await2 { try await store.votedTranscript(for: url).0 }
+        case "whisper": transcript = try await2 { try await WhisperIndexer().transcribe(url: url, asset: asset) }
+        default:        transcript = try await2 { try await ParakeetIndexer().transcribe(url: url, asset: asset) }
+        }
+        // Vision and the speech profile sharpen the framing and audio axes. Both optional: a take
+        // missing one is scored on the axes it has rather than penalised for the gap.
+        let vision = try? store.vision(for: url).0
+        let speech = try? SilenceDetector.analyse(url: url)
+        let take = Take(index: 0, url: url, transcript: transcript, vision: vision, speech: speech)
+        let found = TakeFinder.find(in: take,
+                                    minimumSimilarity: Double(option("--similarity") ?? "") ?? 0.72)
+        print(String(format: "analysed in %.1f s", Date().timeIntervalSince(t0)))
+        print(found.summary)
+
+        if let out = option("--assemble") {
+            let src = try SequentialFrameSource(url: url)
+            let audio = try? AudioSource(url: url)
+            let ref = AssetRef(contentHash: try MediaFingerprint(of: url).hex, path: path,
+                               duration: src.duration, frameRate: src.nominalFrameRate,
+                               hasVideo: true, hasAudio: audio != nil)
+            let (log, report) = try Assembler.assemble(found, asset: ref,
+                                                       frameRate: src.nominalFrameRate)
+            print(report.summary)
+            let session = try RenderSession(document: log.head,
+                                            options: RenderOptions(width: src.width, height: src.height,
+                                                                   sampleRate: 48_000))
+            let rendered = try session.render(to: URL(fileURLWithPath: out))
+            print(String(format: "rendered %d frames in %.1f s = %.0f fps → %@",
+                         rendered.framesRendered, rendered.wallSeconds, rendered.fps, out))
+        }
+    } catch { fail("takes: \(error)") }
+
 case "enhance":
     // sharpy enhance <file> --out <file.wav> [--preset studio|noisy] [--isolation 0..1]
     // Room → studio, using audio units already on the machine. Measured, not asserted.
@@ -823,6 +871,7 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov]
       sharpy enhance <file> --out <file.wav> [--preset studio|noisy]
       sharpy contrast <file> [--min 3.0]
       sharpy qc <rendered file> [--expect-frames N] [--expect-lufs X]

@@ -26,9 +26,11 @@ public struct AttemptGroup: Sendable {
     public let text: String
     /// First time it was said — the group's place in the script.
     public let firstAt: TimeValue
-    /// Attempts spread over more than `TakeFinder.clusterWindow`. Likely a deliberate repetition
-    /// rather than a re-take, and reported rather than assumed either way.
+    /// Possibly a deliberate second beat rather than a re-take, and reported rather than assumed
+    /// either way.
     public let spreadOut: Bool
+    /// Indices of this group's sentences within the recording, in the order they were said.
+    public let members: [Int]
 
     public var best: Rendition? { attempts.max { $0.score < $1.score } }
 }
@@ -37,6 +39,8 @@ public struct RecordingTakes: Sendable {
     public let groups: [AttemptGroup]
     public let totalSentences: Int
     public let sourceDuration: TimeValue
+    /// How many times the performer went through the script from the top.
+    public let passes: Int
 
     /// Lines said only once — no choice to make, and they still belong in the cut.
     public var singles: [AttemptGroup] { groups.filter { $0.attempts.count == 1 } }
@@ -50,8 +54,8 @@ public struct RecordingTakes: Sendable {
 
     public var summary: String {
         guard !groups.isEmpty else { return "takes: nothing found in this recording" }
-        var lines = [String(format: "takes: %d line(s) from %d sentence(s) over %.0f s",
-                            groups.count, totalSentences, sourceDuration.seconds.doubleValue)]
+        var lines = [String(format: "takes: %d line(s) from %d sentence(s) over %.0f s — %d pass(es) of the script",
+                            groups.count, totalSentences, sourceDuration.seconds.doubleValue, passes)]
         lines.append(String(format: "  %d line(s) attempted more than once; keeping the best of each leaves %.0f s",
                             retaken.count, keptSeconds))
         let worst = retaken.max { $0.attempts.count < $1.attempts.count }
@@ -70,10 +74,42 @@ public struct RecordingTakes: Sendable {
 }
 
 public enum TakeFinder {
-    /// Re-takes cluster. Somebody who fluffs a line says it again within seconds, whereas a
-    /// deliberate callback comes back to it much later — so the gap between attempts is real
-    /// evidence about which kind of repetition this is.
+    /// Re-takes cluster — WHEN somebody works line by line. The gap between attempts is then real
+    /// evidence about the kind of repetition.
+    ///
+    /// It is the wrong test for the way people actually record. Measured on the user's own
+    /// 10-minute recording: they perform SIX FULL PASSES of the whole script, so attempts at the
+    /// opening line sit roughly two minutes apart and every one of the 23 repeated lines was
+    /// flagged as "possibly deliberate". The proximity test only applies inside a pass.
     public static let clusterWindow: Double = 90
+
+    /// How many times the recording goes back to the beginning of the script.
+    ///
+    /// A pass ends when the performer RETURNS TO THE TOP, not whenever they step backwards.
+    ///
+    /// Counting every backward step gave 25 passes on a recording that plainly contains about six:
+    /// a restart mid-line, or two lines grouped slightly out of order, each look like a step back.
+    /// A pass boundary is a return to near the beginning of the script AFTER having got well into
+    /// it, which is what "going again from the top" actually looks like and is robust to local
+    /// wobble.
+    static func countPasses(order: [Int], groupCount: Int) -> Int {
+        guard !order.isEmpty, groupCount > 0 else { return 0 }
+        // Back into the first tenth, having previously reached at least a third of the way in.
+        let nearTheTop = max(Double(groupCount) * 0.1, 1)
+        let wellInto = max(Double(groupCount) * 0.33, 2)
+        var passes = 1
+        var reached = 0.0
+        for position in order {
+            let p = Double(position)
+            if p <= nearTheTop, reached >= wellInto {
+                passes += 1
+                reached = p
+            } else {
+                reached = max(reached, p)
+            }
+        }
+        return passes
+    }
 
     public static func find(in take: Take,
                             minimumSimilarity: Double = 0.72,
@@ -103,10 +139,29 @@ public enum TakeFinder {
             let spread = last.seconds.doubleValue - first.seconds.doubleValue
             groups.append(AttemptGroup(
                 attempts: renditions, text: lines[members[0]].text, firstAt: first,
-                spreadOut: members.count > 1 && spread > TakeFinder.clusterWindow))
+                spreadOut: members.count > 1 && spread > TakeFinder.clusterWindow,
+                members: members))
         }
         groups.sort { $0.firstAt < $1.firstAt }
-        return RecordingTakes(groups: groups, totalSentences: lines.count,
-                              sourceDuration: take.transcript.words.last?.range.end ?? .zero)
+
+        // Which group each sentence belongs to, in the order the sentences were said. Going
+        // BACKWARDS through the script is a new pass.
+        var groupOfLine = [Int: Int]()
+        for (g, group) in groups.enumerated() { for m in group.members { groupOfLine[m] = g } }
+        let order = lines.indices.compactMap { groupOfLine[$0] }
+        let passes = countPasses(order: order, groupCount: groups.count)
+
+        // With a pass structure, a repetition across passes IS a re-take and needs no confirming.
+        // Only a line repeated MORE times than there are passes can be a deliberate second beat.
+        let resolved = passes > 1
+            ? groups.map { group in
+                AttemptGroup(attempts: group.attempts, text: group.text, firstAt: group.firstAt,
+                             spreadOut: group.attempts.count > passes, members: group.members)
+              }
+            : groups
+
+        return RecordingTakes(groups: resolved, totalSentences: lines.count,
+                              sourceDuration: take.transcript.words.last?.range.end ?? .zero,
+                              passes: passes)
     }
 }
