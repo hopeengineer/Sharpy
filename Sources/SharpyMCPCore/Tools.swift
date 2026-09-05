@@ -178,13 +178,15 @@ public let tools: [[String: Any]] = [
     ],
     [
         "name": "remove_words",
-        "description": "Cut speech by word index, Descript-style. Pass indices and ranges from get_transcript — never frame numbers, which is the whole point. Removes the surrounding pause so survivors do not end up double-spaced, merges adjacent removals into one cut, and cuts the linked video with the audio. After this runs, word indices have shifted: re-read get_transcript before cutting again.",
+        "description": "Cut speech the way Descript does — by the words, never by frames. Quote the phrase in 'text', or pass indices and ranges from get_transcript. Pass indices and ranges from get_transcript — never frame numbers, which is the whole point. Removes the surrounding pause so survivors do not end up double-spaced, merges adjacent removals into one cut, and cuts the linked video with the audio. After this runs, word indices have shifted: re-read get_transcript before cutting again.",
         "inputSchema": ["type": "object",
                         "properties": [
                             "words": ["type": "array", "items": ["type": "integer"],
                                       "description": "Word indices to remove."],
                             "ranges": ["type": "array", "items": ["type": "string"],
                                        "description": "Inclusive index ranges as \"start-end\", e.g. \"41-47\"."],
+                            "text": ["type": "array", "items": ["type": "string"],
+                                     "description": "Phrases to cut, quoted exactly as get_transcript returned them — \"the bit I fluffed\". Usually easier and safer than indices, and it refuses rather than cutting a near miss. If a phrase occurs more than once, EVERY occurrence is cut, so quote enough words to be unambiguous."],
                             "fillers": ["type": "boolean", "description": "Remove every filler word (um, uh, …)."],
                             "aggressiveness": ["type": "string", "enum": ["tight", "balanced", "loose"],
                                                "description": "How much of the surrounding pause survives. Default balanced."],
@@ -419,6 +421,25 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
             let t = try session.requireTranscript()
             guard var log = session.log else { throw SessionError.noMediaOpen }
             var indices: [Int] = args?["words"]?.arrayValue?.compactMap { $0.intValue } ?? []
+            // Deletion by QUOTED TEXT — the Descript gesture, expressed for an agent. Indices are
+            // exact and unreadable; quoting the words is how a person says what they want gone, and
+            // it survives the agent mis-copying an index.
+            var notFound: [String] = []
+            for phrase in args?["text"]?.arrayValue ?? [] {
+                guard let wanted = phrase.stringValue else { continue }
+                if let found = t.locate(wanted) {
+                    indices.append(contentsOf: found)
+                } else {
+                    notFound.append(wanted)
+                }
+            }
+            if !notFound.isEmpty && indices.isEmpty {
+                // Refuse rather than cut something near it. A phrase the transcript does not
+                // contain usually means the agent is working from its own paraphrase, and deleting
+                // the closest match would remove words nobody asked about.
+                return toolResult("could not find \(notFound.map { "\"\($0)\"" }.joined(separator: ", ")) in the transcript. "
+                                  + "Quote the words exactly as get_transcript returned them.", isError: true)
+            }
             for r in args?["ranges"]?.arrayValue ?? [] {
                 guard let s = r.stringValue else { continue }
                 let bits = s.split(separator: "-").compactMap { Int($0) }

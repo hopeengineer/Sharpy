@@ -80,6 +80,28 @@ public struct Transcript: Sendable, Codable {
 
     public var fillers: [Word] { words.filter(\.isFiller) }
 
+    /// Word indices of every occurrence of a phrase, or nil if it is not there.
+    ///
+    /// Matching is on normalised words, so punctuation and case do not stop a quote matching what
+    /// was said. EVERY occurrence is returned, not the first: a phrase said twice is two beats, and
+    /// silently cutting only one of them would leave the caller believing both were gone.
+    public func locate(_ phrase: String) -> [Int]? {
+        func norm(_ s: String) -> String {
+            s.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "'" }
+        }
+        let needle = phrase.split(separator: " ").map(String.init).map(norm).filter { !$0.isEmpty }
+        guard !needle.isEmpty else { return nil }
+        let haystack = words.map { norm($0.text) }
+        var found: [Int] = []
+        guard haystack.count >= needle.count else { return nil }
+        for start in 0...(haystack.count - needle.count) {
+            if Array(haystack[start..<(start + needle.count)]) == needle {
+                found.append(contentsOf: (start..<(start + needle.count)).map { words[$0].index })
+            }
+        }
+        return found.isEmpty ? nil : found
+    }
+
     /// Words below a confidence floor — where the agent must not act without escalating.
     public func lowConfidence(below floor: Rational) -> [Word] { words.filter { $0.confidence < floor } }
 
