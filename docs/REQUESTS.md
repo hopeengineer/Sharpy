@@ -63,6 +63,10 @@ numeric check called clean.
 - It names **which axis decided each pick**, so a disagreement is arguable.
 - **NOT VALIDATED** — no real multi-take material has been measured. It needs 5–6 takes of one
   script from the user. **This is the single thing most worth asking them for.**
+- Three alignment bugs were found by testing rather than reasoning, and are recorded in the commit:
+  exact text matching fails (takes differ in precisely the words being judged); the spine was chosen
+  by segment count, which made the *most hesitant* take the reference; and a long stall splits a
+  sentence, so hesitant takes could not match at all.
 - **open** — no MCP tool yet, and no automatic stitching of the chosen renditions into a timeline.
 - **stated limit** — it does not judge "confidence". It measures four proxies and says which one
   drove the choice. Claiming to hear confidence would be inventing an authority it does not have.
@@ -143,6 +147,36 @@ data source this project does not have.
 
 If a legitimate feed is wanted later, the mechanism is already the right shape: whatever supplies
 the reference, `EditStyle` measures it.
+
+## 11. Descript-style editing — edit by deleting words — **done**
+
+> "I hope you built the descript feature, where you can edit by just deleting words — cutting out
+> unnecessary words, silences, etc."
+
+- **done** — `remove_words` cuts by the words, never by frames. It takes word indices, index ranges,
+  `fillers: true`, and now **`text`: quote the phrase exactly as the transcript returned it**, which
+  is the actual Descript gesture. Verified on the author's reel: quoting *"That crap was worse than
+  my phone."* removed 7 words in one cut, 88.30 s → 85.70 s.
+- A phrase that is not in the transcript is **refused**, not matched approximately — a near miss
+  usually means working from a paraphrase, and cutting the closest match removes words nobody asked
+  about.
+- Every occurrence is cut, not the first, and it says so. Silently cutting one of two would leave
+  the caller believing both were gone.
+- **done** — `tighten_pauses` for silences.
+- **open** — the human-facing document view. The agent-facing half is what an agent-first tool needs
+  first, and it exists.
+
+## 12. A repeated line is not a duplicate — **done**
+
+> "You can't just remove something for similarity. If a user says 'this hook goes here' twice while
+> pointing at two points, it doesn't mean one needs to be removed. That's why I keep saying
+> contextual aware editing."
+
+Correct, and it caught a real defect in take selection as it was being written. Fixed: matching is
+**monotonic** (each take scanned forward only, so the second beat pairs with the second beat), and
+**nothing removes a repetition**. Repeated lines are kept, paired in order, and flagged for a person
+to confirm — with the warning threshold deliberately looser than the merge threshold, so it fires
+before any merge would. Two tests pin it.
 
 ---
 
