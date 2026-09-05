@@ -144,13 +144,23 @@ public enum TakeSelector {
     /// "the um hook goes here" and "the hook goes here" are the SAME LINE — that a filler is
     /// present in one is the finding, not a reason to treat them as different sentences.
     public static func similarity(_ a: [String], _ b: [String]) -> Double {
+        similarity(a, b, match: ==)
+    }
+
+    /// The same measure with the caller deciding what counts as the same word.
+    ///
+    /// Take selection keeps exact equality — its numbers were measured that way and a looser
+    /// matcher would have to be re-measured against them. Script location needs inflection
+    /// tolerance, and gets it through this parameter rather than by changing what selection does.
+    public static func similarity(_ a: [String], _ b: [String],
+                                  match: (String, String) -> Bool) -> Double {
         guard !a.isEmpty, !b.isEmpty else { return 0 }
         var row = [Int](repeating: 0, count: b.count + 1)
         for i in 1...a.count {
             var previous = 0
             for j in 1...b.count {
                 let temp = row[j]
-                row[j] = a[i - 1] == b[j - 1] ? previous + 1 : max(row[j], row[j - 1])
+                row[j] = match(a[i - 1], b[j - 1]) ? previous + 1 : max(row[j], row[j - 1])
                 previous = temp
             }
         }

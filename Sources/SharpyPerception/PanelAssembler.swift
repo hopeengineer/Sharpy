@@ -111,16 +111,32 @@ public enum PanelAssembler {
                 unmatched.append(entry.cut.text + "  (no panel for \"\(entry.cut.panel.rawValue)\")")
                 continue
             }
+            // The opening runs each panel one step further behind than the last, so it must last
+            // long enough for the LAST panel to finish the line; the earlier ones hold their final
+            // frame for the difference.
+            let step = active == nil ? snap(echo) : .zero
+            let tail = TimeValue(frames: step.frame(at: frameRate) * Int64(max(panels - 1, 0)), at: frameRate)
+            let span = duration + tail
             beats.append(PanelPlan.Beat(
                 panel: active, text: entry.cut.text, source: onGrid,
-                timeline: TimeRange(start: playhead, end: playhead + duration),
-                echoStep: active == nil ? snap(echo) : .zero,
+                timeline: TimeRange(start: playhead, end: playhead + span),
+                echoStep: step,
                 frozenAt: frozen))
             // Only the panel that spoke advances. That is the pause: the others are exactly where
             // they were, and will carry on from there.
+            //
+            // After the opening each panel is frozen where IT got to, which for a lagging panel is
+            // its own lag short of the line's end. Freezing them all at the line's end made panels
+            // 2 and 3 jump forward by their lag at the first cut — a cut, in an edit whose whole
+            // point is that there are none.
             if let active { frozen[active] = onGrid.end }
-            else { for p in 0..<panels { frozen[p] = onGrid.end } }
-            playhead = playhead + duration
+            else {
+                for p in 0..<panels {
+                    let lag = TimeValue(frames: step.frame(at: frameRate) * Int64(p), at: frameRate)
+                    frozen[p] = max(onGrid.end - lag, .zero)
+                }
+            }
+            playhead = playhead + span
         }
         return PanelPlan(panels: panels, beats: beats, duration: playhead, unmatched: unmatched)
     }

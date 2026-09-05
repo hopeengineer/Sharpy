@@ -360,7 +360,17 @@ case "transcribe":
                 let dur = try AudioSource(url: url).duration.seconds.doubleValue
                 print(String(format: "%d words in %.1f s  (%.0f s audio, %.0f× realtime)  engines: %@",
                              t.words.count, dt, dur, dur / dt, t.engines.joined(separator: ", ")))
-                if argv.contains("--segments") {
+                if let span = option("--words"), let dash = span.firstIndex(of: "-"),
+                   let a = Int(span[..<dash]), let b = Int(span[span.index(after: dash)...]) {
+                    // Word by word, with the gap before each. This is the view that settles
+                    // boundary questions — segments hide exactly the timings a cut depends on.
+                    let sorted = t.words.sorted { $0.index < $1.index }
+                    for (i, w) in sorted.enumerated() where w.index >= a && w.index <= b {
+                        let gap = i > 0 ? (w.range.start - sorted[i - 1].range.end).seconds.doubleValue : 0
+                        print(String(format: "  word %3d  %7.2f–%7.2f  gap %.2f  %@", w.index,
+                                     w.range.start.seconds.doubleValue, w.range.end.seconds.doubleValue, gap, w.text))
+                    }
+                } else if argv.contains("--segments") {
                     for s in t.segments() { print(String(format: "  [%5d] %7.2f–%7.2f  %@", s.firstWord, s.range.start.seconds.doubleValue, s.range.end.seconds.doubleValue, s.text)) }
                 } else {
                     print(t.text)
@@ -585,13 +595,20 @@ case "script":
     } catch { fail("script: \(error)") }
 
 case "assemble":
-    // sharpy assemble <script.txt> <video> --out <file.mov> [--panels 3] [--size 1080x1920]
+    // sharpy assemble <script.txt> <video> --out <file.mov> [--reference <video>] [--panels 3]
+    //                 [--size WxH] [--echo 0.03] [--accept-problems] [--codec hevc|h264|prores]
     //
-    // The three-panel edit, built the way the user described it: the panels PAUSE rather than cut,
-    // so each one resumes the gesture it stopped mid-way through.
+    // The stacked edit, built the way the user described it: the panels PAUSE rather than cut, so
+    // each one resumes the gesture it stopped mid-way through. Dressed the way the reference is
+    // dressed — framing, labels, captions, echo — each of those measured off the reference.
+    //
+    // And then LISTENED TO. The first version of this command passed every check it had and was
+    // wrong in six places anyone would have heard in thirty seconds. Now the output is transcribed
+    // and read back against the script, and measured against the reference, before it is called
+    // done — and if either disagrees the command says so and exits non-zero.
     let rest2 = Array(argv.dropFirst())
     guard rest2.count >= 2, let outPath = option("--out") else {
-        fail("usage: sharpy assemble <script.txt> <video> --out <file.mov> [--panels 3] [--size WxH]")
+        fail("usage: sharpy assemble <script.txt> <video> --out <file.mov> [--reference <video>] [--panels 3] [--size WxH] [--echo s] [--accept-problems]")
     }
     do {
         guard #available(macOS 26.0, *) else { fail("assemble needs macOS 26") }
@@ -599,135 +616,317 @@ case "assemble":
         let url = URL(fileURLWithPath: videoPath)
         let panels = Int(option("--panels") ?? "3") ?? 3
 
+        // ---- 1. Where every line is, and whether the answer is trustworthy ----
         let parsed = CutScript.parse(try String(contentsOfFile: scriptPath, encoding: .utf8))
         let transcript = try await2 {
             try await ParakeetIndexer().transcribe(url: url, asset: NodeID(contentOf: videoPath))
         }
-        let located = CutScript.locate(parsed, in: transcript)
-        let probe = try SequentialFrameSource(url: url)
-        let planRate = option("--rate").map(rate) ?? probe.nominalFrameRate
-        // The opening's echo is measured off the reference when one is given, because how far the
-        // panels lag is a property of the format being copied, not something to invent.
-        var echo = TimeValue.zero
-        if let stated = Double(option("--echo") ?? "") {
-            echo = TimeValue(seconds: Rational(Int64((stated * 1000).rounded()), 1000))
-            print(String(format: "echo:      %.2f s between panels, as given", stated))
-        } else if let referencePath = option("--reference") {
-            let referenceURL = URL(fileURLWithPath: referencePath)
-            if let layout = try? LayoutAnalyzer.analyse(url: referenceURL) {
-                // Sound first: it is what carries the echo, and the picture only says where to look.
-                let measured = layout.simultaneousOpening
-                    .flatMap { try? AudioEcho.measure(url: referenceURL, within: $0) }?.seconds
-                    ?? layout.echoStepSeconds
-                if let measured {
-                    echo = TimeValue(seconds: Rational(Int64((measured * 1000).rounded()), 1000))
-                    print(String(format: "reference: panels open %.2f s apart", measured))
-                } else {
-                    // Saying so, rather than picking a plausible number. An invented echo would be
-                    // indistinguishable in the output from a measured one, and wrong.
-                    print("reference: the opening's echo could not be measured — neither the panels'"
-                          + " pictures nor the sound gave a clear period, which happens when the"
-                          + " reference shot its panels as separate takes rather than delaying one.")
-                    print("           The panels will open together. Pass --echo <seconds> to set it.")
-                }
+        var located = CutScript.locate(parsed, in: transcript)
+        var problems = CutScript.problems(located, in: transcript)
+        if argv.contains("--cut-stumbles") {
+            let found = CutScript.stumbles(located, in: transcript)
+            located = CutScript.trimming(found, from: located)
+            for s in found { print(String(format: "trimmed:   \"%@\" at %.2f s off the %@ of cut %d, as asked", s.text as CVarArg, s.range.start.seconds.doubleValue, s.trailing ? "end" : "start", s.cut.order)) }
+            problems = CutScript.problems(located, in: transcript)
+        }
+        if !problems.isEmpty {
+            print("QUESTIONS before cutting:")
+            for q in problems { print("  ? " + q) }
+            if !argv.contains("--accept-problems") {
+                fail("assemble: \(problems.count) question(s) above need an answer. A line dropped or played twice is not an edit anyone asked for. Pass --accept-problems to cut anyway.")
             }
         }
-        let plan = PanelAssembler.plan(located: located, panels: panels, frameRate: planRate, echo: echo)
-        print(plan.summary)
-        guard !plan.beats.isEmpty else { fail("assemble: no scripted line could be placed in the recording") }
 
-        let src = probe
-        let r = planRate
-        // The reel is vertical; the output keeps the source's own width and makes room for the
-        // stack. Overridable, never guessed at silently.
-        var w = src.width, h = src.height
+        let probe = try SequentialFrameSource(url: url)
+        let r = option("--rate").map(rate) ?? probe.nominalFrameRate
+
+        // ---- 2. What the reference looks like ----
+        var style: ReferenceStyle?
+        var echo = TimeValue.zero
+        var w = probe.width, h = probe.height
+        if let referencePath = option("--reference") {
+            let referenceURL = URL(fileURLWithPath: referencePath)
+            let measured = try ReferenceStyle.measure(url: referenceURL, panels: panels)
+            print(measured.summary)
+            style = measured
+            w = measured.width; h = measured.height
+            if let layout = try? LayoutAnalyzer.analyse(url: referenceURL),
+               let opening = layout.simultaneousOpening,
+               let echoMeasured = try? AudioEcho.measure(url: referenceURL, within: opening) {
+                echo = TimeValue(seconds: Rational(Int64((echoMeasured.seconds * 1000).rounded()), 1000))
+                print("reference: " + echoMeasured.description)
+            } else {
+                print("reference: no echo measured in the opening — the panels will open in unison")
+            }
+        }
+        if let stated = Double(option("--echo") ?? "") {
+            echo = TimeValue(seconds: Rational(Int64((stated * 1000).rounded()), 1000))
+            print(String(format: "echo:      %.3f s between panels, as given", stated))
+        }
         if let size = option("--size"), let x = size.firstIndex(of: "x"),
            let ww = Int(size[..<x]), let hh = Int(size[size.index(after: x)...]) { w = ww; h = hh }
+        print("output:    \(w)x\(h)" + (option("--size") == nil && style != nil ? " (the reference's)" : ""))
 
-        // Where the face is, so the bands do not crop to a chin. Measured if Vision has run.
-        let subjectY = (try? IndexStore().vision(for: url).0).flatMap { Reframer.subject(in: $0) }?.y
-        print(subjectY.map { String(format: "face measured at %.0f%% down the frame", $0 * 100) }
-              ?? "no Vision index — bands assume the face sits a third of the way down")
-        let placements = (0..<panels).map {
-            PanelBands.placement(panel: $0, of: panels, sourceWidth: src.width, sourceHeight: src.height,
-                                 outputWidth: w, outputHeight: h, subjectY: subjectY)
+        let plan = PanelAssembler.plan(located: located, panels: panels, frameRate: r, echo: echo)
+        print(plan.summary)
+        guard !plan.beats.isEmpty else { fail("assemble: no scripted line could be placed in the recording") }
+        let lagFrames = plan.beats.first(where: { $0.panel == nil })?.echoStep.frame(at: r) ?? 0
+        if lagFrames > 0 { print("opening:   each panel runs \(lagFrames) frame(s) behind the one above, sound \(Int((echo.seconds.doubleValue * 1000).rounded())) ms behind") }
+
+        // ---- 3. Framing: the face as big and as placed as the reference's ----
+        let vision = try? IndexStore().vision(for: url).0
+        let face = vision.flatMap { PanelFraming.face(in: $0) }
+        // A held frame must show a face. The instant the sound chooses is where the line ends,
+        // and at the end of a take that is a hand reaching for the camera.
+        func holdable(_ instant: TimeValue) -> TimeValue {
+            guard let vision else { return instant }
+            return PanelFraming.lastFaceInstant(before: instant, in: vision, frameRate: r)
         }
-        for (i, p) in placements.enumerated() { print(PanelBands.describe(panel: i, of: panels, placement: p)) }
+        var placements: [ClipPlacement] = []
+        var framingLine: String?
+        for panel in 0..<panels {
+            if let face, let target = style?.faces[panel] {
+                let (placement, achieved, note) = PanelFraming.placement(
+                    panel: panel, of: panels, sourceWidth: probe.width, sourceHeight: probe.height,
+                    outputWidth: w, outputHeight: h, face: face, target: target)
+                placements.append(placement)
+                if panel == 0 {
+                    framingLine = note ?? String(format: "face %.0f%% of the source height, cropped so it is %.0f%% of the band (reference %.0f%%)",
+                                                 face.height * 100, achieved * 100, target.heightInBand * 100)
+                }
+            } else {
+                placements.append(PanelBands.placement(
+                    panel: panel, of: panels, sourceWidth: probe.width, sourceHeight: probe.height,
+                    outputWidth: w, outputHeight: h, subjectY: face?.centreY))
+            }
+        }
+        print("framing:   " + (framingLine ?? "no reference face measurement — bands keep as much of the source as fits"))
 
+        // ---- 4. The document ----
         let sampleRate = 48_000
         let audio = try? AudioSource(url: url, sampleRate: sampleRate)
         var log = CommandLog(initial: Document(timeline: Timeline(name: "panels", frameRate: r, sampleRate: sampleRate)))
-        let asset = AssetRef(contentHash: "path:" + videoPath, path: videoPath, duration: src.duration,
-                             frameRate: src.nominalFrameRate, hasVideo: true, hasAudio: audio != nil)
+        let asset = AssetRef(contentHash: "path:" + videoPath, path: videoPath, duration: probe.duration,
+                             frameRate: probe.nominalFrameRate, hasVideo: true, hasAudio: audio != nil)
         try log.append(.addAsset(asset))
-        // Bottom panel first: later tracks composite over earlier ones, and the bands do not
-        // overlap, so the order only decides who wins a rounding row at a seam.
         for i in 0..<panels { try log.append(.addTrack(kind: .video, name: "P\(i + 1)")) }
-        if audio != nil { try log.append(.addTrack(kind: .audio, name: "A1")) }
+        // One audio track per panel: the opening plays the hook once per panel, each a step later
+        // than the last. That is the echo — measured at 30 ms on the reference, not chosen.
+        let audioTracks = audio != nil ? panels : 0
+        for i in 0..<audioTracks { try log.append(.addTrack(kind: .audio, name: "A\(i + 1)")) }
         let id = log.head.assets.keys.first!
-        let frameDuration = TimeValue(frames: 1, at: r)
+        let oneFrame = TimeValue(frames: 1, at: r)
 
-        // Every beat writes to every panel: one plays, the rest hold the frame they stopped on.
-        // Writing only the speaking panel would leave the others empty — black, not held.
         for beat in plan.beats {
-            let basis: Basis = beat.panel == nil
-                ? .clientRule(rule: "the opening plays every panel at once")
-                : .clientRule(rule: "scripted cut assigns this line to a panel")
+            let isOpening = beat.panel == nil
+            let basis: Basis = isOpening
+                ? .clientRule(rule: "the hook plays on every panel, each a measured step behind the last")
+                : .clientRule(rule: "the script assigns this line to this panel; the others hold")
             let decision = Decision(kind: .cut, at: beat.timeline.start,
                                     params: ["line": String(beat.text.prefix(60))], basis: basis)
             for panel in 0..<panels {
-                let clip: Clip
-                if beat.panel == nil || beat.panel == panel {
-                    // During the opening each band runs a step further behind, so the same sentence
-                    // arrives three times over. Clamped at the start of the recording: a panel
-                    // cannot lag into footage that was never shot.
+                if isOpening || beat.panel == panel {
                     let lag = TimeValue(frames: beat.echoStep.frame(at: r) * Int64(panel), at: r)
                     let from = max(beat.source.start - lag, .zero)
-                    clip = Clip(asset: id,
-                                source: TimeRange(start: from, end: from + beat.source.duration),
-                                start: beat.timeline.start,
-                                placement: placements[panel],
-                                timelineDuration: beat.timeline.duration)
+                    let playing = TimeRange(start: from, end: from + beat.source.duration)
+                    // Play up to the last frame that still shows a face, and hold that frame for
+                    // the rest of the line. At the end of a take the last half second of picture
+                    // is the reach for the camera; the sound of the last word plays over the held
+                    // frame instead, which is what an editor does by hand.
+                    let lastFace = min(holdable(playing.end - oneFrame), playing.end - oneFrame)
+                    let playEnd = lastFace + oneFrame
+                    let playSpan = playEnd - playing.start
+                    try log.append(.placeClip(track: panel, clip: Clip(
+                        asset: id, source: TimeRange(start: playing.start, end: playEnd), start: beat.timeline.start,
+                        placement: placements[panel]), decision: decision))
+                    let finished = beat.timeline.start + playSpan
+                    if finished < beat.timeline.end {
+                        try log.append(.placeClip(track: panel, clip: Clip.freeze(
+                            asset: id, at: lastFace, frameDuration: oneFrame,
+                            start: finished, duration: beat.timeline.end - finished,
+                            placement: placements[panel]), decision: decision))
+                    }
                 } else if let held = beat.frozenAt[panel] {
-                    clip = Clip.freeze(asset: id, at: held, frameDuration: frameDuration,
-                                       start: beat.timeline.start, duration: beat.timeline.duration,
-                                       placement: placements[panel])
-                } else {
-                    continue
+                    try log.append(.placeClip(track: panel, clip: Clip.freeze(
+                        asset: id, at: holdable(held), frameDuration: oneFrame,
+                        start: beat.timeline.start, duration: beat.timeline.duration,
+                        placement: placements[panel]), decision: decision))
                 }
-                try log.append(.placeClip(track: panel, clip: clip, decision: decision))
             }
             if audio != nil {
-                // The sound is whoever is talking. A frozen panel is silent by construction — it is
-                // one frame held, and one frame has no sound to contribute.
                 let from = beat.source.start.alignedToSample(at: sampleRate)
                 let to = beat.source.end.alignedToSample(at: sampleRate)
-                try log.append(.placeClip(track: panels,
-                                          clip: Clip(asset: id, source: TimeRange(start: from, end: to),
-                                                     start: beat.timeline.start.alignedToSample(at: sampleRate)),
-                                          decision: decision))
+                if isOpening && lagFrames > 0 {
+                    // Three arrivals summing to the level of one. The first carries half, each
+                    // echo a quarter: at 30 ms the copies are nearly coherent, so unity on all
+                    // three would peak at three times the source and clip.
+                    for panel in 0..<panels {
+                        let lag = TimeValue(seconds: echo.seconds * Rational(Int64(panel)))
+                        let gain = panel == 0 ? Rational(1, 2) : Rational(1, 2 * Int64(max(panels - 1, 1)))
+                        try log.append(.placeClip(track: panels + panel, clip: Clip(
+                            asset: id, source: TimeRange(start: from, end: to),
+                            start: (beat.timeline.start + lag).alignedToSample(at: sampleRate),
+                            gain: gain), decision: decision))
+                    }
+                } else {
+                    try log.append(.placeClip(track: panels, clip: Clip(
+                        asset: id, source: TimeRange(start: from, end: to),
+                        start: beat.timeline.start.alignedToSample(at: sampleRate)), decision: decision))
+                }
             }
         }
         let replayedPanels = try log.replay().id
         precondition(replayedPanels == log.head.id, "replay integrity")
-        print(String(format: "timeline:  %d track(s), %.1f s", log.head.timeline.tracks.count,
-                     log.head.timeline.duration.seconds.doubleValue))
 
+        // ---- 5. Labels and captions, placed where the reference places its own ----
+        var cache: [String: RenderedText] = [:]
+        var items: [TextOverlays.Item] = []
+        var shownCaptions: [(text: String, range: TimeRange)] = []
+        let bandH = Double(h) / Double(panels)
+        let whole = TimeRange(start: .zero, end: log.head.timeline.duration)
+        let labels = PanelLabels.derive(from: parsed, panels: panels)
+        if let style {
+            for panel in 0..<panels {
+                guard let text = labels[panel], !text.isEmpty else { continue }
+                // The tallest persistent text on the band is the word; the rest is its furniture.
+                guard let ref = style.labels.filter({ $0.panel == panel }).max(by: { $0.height < $1.height }) else { continue }
+                let point = max(ref.height * bandH, 10)
+                items.append(try TextOverlays.item(text, style: .label(pointSize: point),
+                    topLeft: (ref.x, (Double(panel) + ref.y) / Double(panels)),
+                    outputWidth: w, outputHeight: h, during: whole, cache: &cache))
+            }
+            print("labels:    " + (0..<panels).compactMap { labels[$0] }.joined(separator: " / ")
+                  + (style.labels.isEmpty ? "  (reference has none — not drawn)" : ""))
+            if let captions = style.captions, captions.coverage > 0.5 {
+                let size = max(captions.medianWords, 1)
+                let point = max(captions.heightInBand, 0.04) * bandH / 1.25
+                var count = 0
+                for beat in plan.beats {
+                    // Words whose MIDDLE falls in the span. A word that only touches the boundary
+                    // is the neighbouring line's: read by overlap, cut 13's captions opened with
+                    // cut 11's last word half a second before cut 13 began, and a word trimmed from
+                    // the sound was still printed on the picture.
+                    let words = transcript.words.filter {
+                        let mid = $0.range.start + TimeValue(seconds: $0.range.duration.seconds / Rational(2))
+                        return mid >= beat.source.start && mid < beat.source.end
+                    }.sorted { $0.index < $1.index }
+                    let groups = CaptionGroups.groups(words: words, size: size)
+                    let band = beat.panel ?? panels / 2
+                    for (gi, group) in groups.enumerated() {
+                        let start = max(beat.timeline.start + (group.range.start - beat.source.start), beat.timeline.start)
+                        let next = gi + 1 < groups.count
+                            ? beat.timeline.start + (groups[gi + 1].range.start - beat.source.start)
+                            : beat.timeline.end
+                        let end = min(max(next, start + oneFrame), beat.timeline.end)
+                        guard start < end else { continue }
+                        items.append(try TextOverlays.item(group.text,
+                            style: .caption(pointSize: point, maximumWidth: Double(w) * 0.7),
+                            anchor: (captions.centreX, (Double(band) + captions.centreY) / Double(panels)),
+                            outputWidth: w, outputHeight: h, during: TimeRange(start: start, end: end),
+                            cache: &cache))
+                        shownCaptions.append((group.text, TimeRange(start: start, end: end)))
+                        count += 1
+                    }
+                }
+                print("captions:  \(count) groups of ~\(size) word(s), following the speech on the live panel")
+            }
+        } else {
+            print("labels:    no reference — none drawn (pass --reference to dress the panels like one)")
+        }
+
+        // ---- 6. Render ----
         let codec: RenderCodec = option("--codec") == "hevc" ? .hevc(bitrate: w * h * 4)
             : option("--codec") == "h264" ? .h264(bitrate: w * h * 6) : .proRes422HQ
-        let session = try RenderSession(document: log.head,
-                                        options: RenderOptions(width: w, height: h, codec: codec,
-                                                               sampleRate: sampleRate))
+        let session = try RenderSession(document: log.head, options: RenderOptions(
+            width: w, height: h, codec: codec, sampleRate: sampleRate,
+            overlays: items.isEmpty ? nil : TextOverlays(items: items)))
         let report = try session.render(to: URL(fileURLWithPath: outPath))
-        print(String(format: "rendered:  %d frames in %.2f s = %.1f fps → %@",
+        print(String(format: "rendered:  %d frames in %.1f s = %.1f fps → %@",
                      report.framesRendered, report.wallSeconds, report.fps, outPath))
-        // The stack is not the source's shape, so the usual "did it come out looking like the
-        // input" check would object to the format itself. What matters here is that all three bands
-        // carry picture — a black band is the failure this edit actually has.
-        if let bands = try? RenderVerifier.bandsCarryPicture(output: URL(fileURLWithPath: outPath), bands: panels) {
-            print(bands)
+
+        // ---- 7. Watch it. Listen to it. Compare it. ----
+        var failures: [String] = []
+        let outURL = URL(fileURLWithPath: outPath)
+        if let bands = try? RenderVerifier.bandsCarryPicture(output: outURL, bands: panels) {
+            print(bands); if bands.contains("BLANK") { failures.append("a band is blank") }
+        }
+        let heard = try await2 { try await ParakeetIndexer().transcribe(url: outURL, asset: NodeID(contentOf: outPath)) }
+        let readback = ScriptReadback.check(output: heard, source: transcript, plan: plan, hook: parsed.hook?.text)
+        print(readback.summary)
+        failures += readback.problems
+        if !shownCaptions.isEmpty {
+            // Every caption must be HEARD while it is shown. A caption of a word that was cut, or a
+            // caption that arrives before its line, is text on the picture that the sound
+            // contradicts — and the reference comparison, which only asks whether captions exist,
+            // passed both.
+            let wrong = ScriptReadback.captionsNotHeard(shownCaptions, in: heard)
+            if wrong.isEmpty {
+                print("captions:  all \(shownCaptions.count) heard while shown")
+            } else {
+                print("captions:  \(wrong.count) shown but not heard at that moment")
+                for c in wrong.prefix(6) { print("  ✗ " + c) }
+                failures += wrong
+            }
+        }
+        if let style {
+            let mine = try ReferenceStyle.measure(url: outURL, panels: panels)
+            let differences = ReferenceComparison.compare(reference: style, output: mine)
+            if differences.isEmpty {
+                print("reference: the output carries labels, captions and framing the way the reference does")
+            } else {
+                print("reference: \(differences.count) difference(s)")
+                for d in differences { print("  ✗ " + d) }
+            }
+            failures += differences
+        }
+        if failures.isEmpty {
+            print("\nVERDICT:   passes — heard against the script, measured against the reference")
+        } else {
+            print("\nVERDICT:   NOT DONE — \(failures.count) problem(s) above. The file exists; it is not the edit.")
+            exit(2)
         }
     } catch { fail("assemble: \(error)") }
+
+case "readback":
+    // sharpy readback <script.txt> <source video> <rendered file> [--reference <video>] [--panels 3]
+    // Listen to a finished edit against its script without rendering it again.
+    let rb = Array(argv.dropFirst())
+    guard rb.count >= 3 else { fail("usage: sharpy readback <script.txt> <source> <output> [--reference <video>] [--panels 3]") }
+    do {
+        guard #available(macOS 26.0, *) else { fail("readback needs macOS 26") }
+        let panels = Int(option("--panels") ?? "3") ?? 3
+        let parsed = CutScript.parse(try String(contentsOfFile: rb[0], encoding: .utf8))
+        let sourceURL = URL(fileURLWithPath: rb[1]), outURL = URL(fileURLWithPath: rb[2])
+        let source = try await2 { try await ParakeetIndexer().transcribe(url: sourceURL, asset: NodeID(contentOf: rb[1])) }
+        let located = CutScript.locate(parsed, in: source)
+        let probe = try SequentialFrameSource(url: sourceURL)
+        var echo = TimeValue.zero
+        if let e = Double(option("--echo") ?? "") { echo = TimeValue(seconds: Rational(Int64((e * 1000).rounded()), 1000)) }
+        let plan = PanelAssembler.plan(located: located, panels: panels, frameRate: probe.nominalFrameRate, echo: echo)
+        let heard = try await2 { try await ParakeetIndexer().transcribe(url: outURL, asset: NodeID(contentOf: rb[2])) }
+        let report = ScriptReadback.check(output: heard, source: source, plan: plan, hook: parsed.hook?.text)
+        print(report.summary)
+        var failures = report.problems
+        if let referencePath = option("--reference") {
+            let reference = try ReferenceStyle.measure(url: URL(fileURLWithPath: referencePath), panels: panels)
+            let mine = try ReferenceStyle.measure(url: outURL, panels: panels)
+            print(mine.summary)
+            let differences = ReferenceComparison.compare(reference: reference, output: mine)
+            for d in differences { print("  ✗ " + d) }
+            failures += differences
+        }
+        print(failures.isEmpty ? "\nVERDICT:   passes" : "\nVERDICT:   NOT DONE — \(failures.count) problem(s)")
+        if !failures.isEmpty { exit(2) }
+    } catch { fail("readback: \(error)") }
+
+case "style":
+    // sharpy style <reference> [--panels 3] — how the reference dresses its panels
+    guard let path = argv.dropFirst().first else { fail("usage: sharpy style <reference video> [--panels 3]") }
+    do {
+        let panels = Int(option("--panels") ?? "3") ?? 3
+        let style = try ReferenceStyle.measure(url: URL(fileURLWithPath: path), panels: panels)
+        print(style.summary)
+    } catch { fail("style: \(error)") }
 
 case "match":
     // sharpy match <reference> <your video>

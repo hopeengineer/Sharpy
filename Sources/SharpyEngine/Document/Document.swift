@@ -213,21 +213,26 @@ public struct Clip: Hashable, Sendable, Codable {
     /// bands take turns talking is entirely freezes, and a design that treated them as a separate
     /// feature would have to special-case the most common thing people do.
     public let timelineDuration: TimeValue?
+    /// Level multiplier for an AUDIO clip. `nil` is unity, which is what every clip was before
+    /// gain existed, so old documents decode unchanged. Needed the moment two clips of the same
+    /// sound are summed on purpose — an echo is three copies, and three copies at unity clip.
+    public let gain: Rational?
     /// Uses the TIMELINE span, not the source duration. A retimed clip occupies the timeline for
     /// as long as it plays, and getting this wrong makes every overlap check, ripple delete and
     /// timeline duration silently incorrect for any clip that is not at normal speed.
     public var end: TimeValue { start + timelineSpan }
     public var range: TimeRange { TimeRange(start: start, end: end) }
     public init(asset: NodeID, source: TimeRange, start: TimeValue,
-                placement: ClipPlacement? = nil, timelineDuration: TimeValue? = nil) {
+                placement: ClipPlacement? = nil, timelineDuration: TimeValue? = nil,
+                gain: Rational? = nil) {
         self.asset = asset; self.source = source; self.start = start
-        self.placement = placement; self.timelineDuration = timelineDuration
+        self.placement = placement; self.timelineDuration = timelineDuration; self.gain = gain
     }
 
     /// The same clip somewhere else in the frame.
     public func placed(_ placement: ClipPlacement?) -> Clip {
         Clip(asset: asset, source: source, start: start,
-             placement: placement, timelineDuration: timelineDuration)
+             placement: placement, timelineDuration: timelineDuration, gain: gain)
     }
 
     /// Held on one frame for `duration` — the freeze.

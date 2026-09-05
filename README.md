@@ -409,7 +409,15 @@ measurement above inference.
 
 ### Assembling a stacked edit
 
-`sharpy assemble <script.txt> <video> --out <file.mov> [--panels 3] [--echo 0.5]` renders the format
-where several panels take turns and the silent ones freeze mid-gesture. Bands centre on the measured
-face; every band is checked for picture, because a panel that got no clip renders black and looks
-deliberate.
+`sharpy assemble <script.txt> <video> --out <file.mov> --reference <video> [--cut-stumbles]` renders
+the format where several panels take turns and the silent ones freeze mid-gesture. Everything about
+the dressing — face size, label position, caption size, the echo in the opening — is measured off
+the reference; nothing is chosen. Before cutting it asks about any line it cannot place, any two
+lines that overlap, and any lone unscripted word before a pause, and refuses to render until
+answered. After rendering it transcribes the output and reads it back against the script, checks
+every caption is heard while shown, measures the result the way it measured the reference, and
+exits non-zero if anything disagrees. `sharpy readback` does the last part on an existing file;
+`sharpy style <reference>` prints the measurements.
+
+The first render of this command passed every check it had and was wrong in six places anyone
+would have heard in thirty seconds. `docs/REQUESTS.md` has the list, the causes, and what changed.

@@ -54,14 +54,23 @@ public struct RenderOptions: Sendable {
     /// Spatial checks against the compositor's own ID pass, evaluated on EVERY rendered frame.
     /// `nil` renders without emitting identity, which is the cheaper path but also the blind one.
     public var spatialGuard: SpatialGuard?
+    /// Layers drawn OVER the video at each instant — text, badges, graphics.
+    ///
+    /// The document has no text clip yet; until it does, overlays are supplied to the render rather
+    /// than authored in the timeline. That is a seam, not a home: a label is an editing decision
+    /// and belongs in the document with a basis like every other decision. Kept here so the seam is
+    /// visible and can be moved, rather than buried in a caller.
+    public var overlays: OverlaySource?
     public init(width: Int, height: Int, codec: RenderCodec = .proRes422HQ, range: TimeRange? = nil,
                 sampleRate: Int = 48_000, channels: Int = 2, includeAudio: Bool = true,
                 loudnessTarget: LoudnessTarget? = nil, verifier: Verifier? = nil,
-                skipVerification: Bool = false, spatialGuard: SpatialGuard? = nil) {
+                skipVerification: Bool = false, spatialGuard: SpatialGuard? = nil,
+                overlays: OverlaySource? = nil) {
         self.width = width; self.height = height; self.codec = codec; self.range = range
         self.sampleRate = sampleRate; self.channels = channels; self.includeAudio = includeAudio
         self.loudnessTarget = loudnessTarget; self.verifier = verifier
         self.skipVerification = skipVerification; self.spatialGuard = spatialGuard
+        self.overlays = overlays
     }
 }
 
@@ -115,7 +124,14 @@ public final class RenderSession {
     private var spatialFindings: [SpatialFinding] = []
     private var spatialFramesChecked = 0
     private var spatialFramesNotCheckable = 0
-    private var sources: [NodeID: SequentialFrameSource] = [:]
+    /// One decoder per (asset, track), not per asset.
+    ///
+    /// A stacked edit has three tracks reading the same file at three distant instants. With one
+    /// decoder per asset each output frame asked it for three positions in turn, every one outside
+    /// the forward window of the last, and every one took the seek path — a reader rebuilt three
+    /// times per frame, 9 fps where the compositor alone does hundreds. Per track, each decoder
+    /// steps forward through its own material and a held frame is answered from cache.
+    private var sources: [String: SequentialFrameSource] = [:]
     private var audioSources: [NodeID: AudioSource] = [:]
 
     public init(document: Document, options: RenderOptions, compositor: MetalCompositor? = nil) throws {
@@ -123,11 +139,12 @@ public final class RenderSession {
         self.compositor = try compositor ?? MetalCompositor()
     }
 
-    private func source(for id: NodeID) throws -> SequentialFrameSource {
-        if let s = sources[id] { return s }
+    private func source(for id: NodeID, track: Int = 0) throws -> SequentialFrameSource {
+        let key = "\(id)#\(track)"
+        if let s = sources[key] { return s }
         guard let asset = document.assets[id] else { throw RenderError.missingAsset(id) }
         let s = try SequentialFrameSource(url: URL(fileURLWithPath: asset.path))
-        sources[id] = s
+        sources[key] = s
         return s
     }
 
@@ -223,7 +240,8 @@ public final class RenderSession {
                 let offset = Int(((hit.start - chunkRange.start).seconds * Rational(Int64(sr))).rounded) * ch
                 guard offset >= 0, offset < mix.count else { continue }
                 let n = min(samples.count, mix.count - offset)
-                for k in 0..<n { mix[offset + k] += samples[k] }
+                let gain = Float(clip.gain?.doubleValue ?? 1)
+                for k in 0..<n { mix[offset + k] += samples[k] * gain }
             }
         }
         return mix
@@ -234,8 +252,8 @@ public final class RenderSession {
                              input: AVAssetWriterInput, adaptor: AVAssetWriterInputPixelBufferAdaptor,
                              writer: AVAssetWriter) throws {
         let t = TimeValue(frames: f, at: rate)
-        let layers = try document.resolveVideo(at: t).map { rl -> CompositeLayer in
-            let src = try source(for: rl.clip.asset)
+        var layers = try document.resolveVideo(at: t).map { rl -> CompositeLayer in
+            let src = try source(for: rl.clip.asset, track: rl.trackIndex)
             guard let frame = try src.frame(at: rl.sourceTime) else {
                 throw RenderError.noFrame(asset: src.url.lastPathComponent, at: rl.sourceTime)
             }
@@ -254,6 +272,7 @@ public final class RenderSession {
             } ?? fit(decodedW, decodedH, rotation: src.rotationDegrees)
             return CompositeLayer(pixelBuffer: frame.pixelBuffer, placement: placement)
         }
+        if let overlays = options.overlays { layers += overlays.layers(at: t) }
         guard let pool = adaptor.pixelBufferPool else { throw RenderError.poolFailed }
         var out: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &out)

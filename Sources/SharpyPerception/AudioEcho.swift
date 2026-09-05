@@ -19,7 +19,10 @@ public enum AudioEcho {
 
     /// Shortest and longest echo worth believing. Below 60 ms it is a room reflection, not an edit;
     /// above a second the panels are taking turns rather than overlapping.
-    public static let shortest = 0.06
+    /// 15 ms is the shortest the ear separates into two arrivals; under that a copy thickens the
+    /// voice rather than repeating it. Set at 60 ms first, and the reference's peak sat exactly on
+    /// that floor — a boundary, not a measurement — so the floor moved to where hearing puts it.
+    public static let shortest = 0.015
     public static let longest = 1.0
 
     public struct Measurement: Sendable {
@@ -27,7 +30,7 @@ public enum AudioEcho {
         /// How much better the peak is than the flat average: 1 means no periodicity at all.
         public let strength: Double
         public var description: String {
-            String(format: "echo of %.2f s in the opening (%.2f× the surrounding correlation)", seconds, strength)
+            String(format: "echo of %.3f s in the opening (%.2f× the surrounding correlation)", seconds, strength)
         }
     }
 

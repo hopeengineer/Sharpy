@@ -302,3 +302,62 @@ What is still open:
 - One scripted line — "Second: instruction files." — still does not locate in the recording.
 - 8.7 fps rendering three panels, against 366 fps measured at four layers. The freezes are seeking
   backwards and rebuilding the reader; not yet investigated.
+
+## What went wrong with the first three-panel render, and what stops it happening again
+
+The first render passed every check it had. The user watched it and said it was 70% there with huge
+mistakes, and asked not to be told what they were but for the app to find them, fix them, and stop
+them recurring. Listening to the output — transcribing it and reading it against the script — found
+six, none of which a screenshot could show:
+
+| heard in the output | cause, in the code |
+| --- | --- |
+| "First folders" twice, with "Third hooks" between | the span for a line was a fixed-length word window (`CutScript.locate`); cut 4's window began inside cut 1's words |
+| "Second instructions file" missing from the intro, heard later inside cut 5 | word matching was exact equality (`TakeSelector.similarity`); *instruction files* vs *instructions file* scored 1 of 3 |
+| that line dropped without a word | the assembler skipped unmatched lines with `continue` and rendered anyway |
+| "the right context" twice; cut 5 opening on the tail of cut 10 | overlapping spans; `collisions()` existed and the render path never called it |
+| four lines chopped mid-sentence ("Automate it with a—", "Make it easy to—") | the window ended on the last MATCHED word, and the speaker's last words differed from the script |
+| hook heard once, panels half a second apart | echo invented at 0.5 s; the reference's, measured from its audio, is 25 ms |
+
+And from the picture, against the reference: no labels, no captions, a loose crop, and — found on
+a third look — a panel frozen on a hand covering the lens, and a caption showing a word that had
+been cut from the sound.
+
+Every one of these has the same root: **the output was checked against the plan and the source,
+never against the script or the reference.** A check that is not on the render path is decoration.
+
+What the app does now, on every `sharpy assemble`:
+
+1. **Locates lines by anchor, then extends to the sentence.** The best window is trimmed to
+   words actually in the line (no line opens on the previous line's full stop), then grows to a
+   pause, a full stop, or a word another line holds — whichever is first. Inflected and misheard
+   words match. Result on the recording: 14 of 14 lines on their true segments, 0 overlaps.
+2. **Asks before cutting.** An unmatched line, an overlap, or a lone unscripted word before a pause
+   is a QUESTION, printed with its nearest candidate, and the render refuses without
+   `--accept-problems` (or `--cut-stumbles` for the stumbles it proposes). Cutting "Claude—" before
+   "CLAUDE.md" was right; cutting the garbled "CLAUDE.md" itself would have been wrong, and the rule
+   was tightened to tell them apart: a false start is followed by a reset pause, a real word by
+   the rest of its sentence.
+3. **Dresses the panels from the reference's measurements**, not from taste: face size in the
+   band (21% on the reference; the user's shot is already tighter at 29%, and the app now says so
+   instead of printing the target as the result), label position and height, caption size and
+   position, echo period from the audio's autocorrelation with boundary peaks refused.
+4. **Holds on a face.** A frozen frame steps back to the last Vision sample with a face; a playing
+   clip ends on its last face and holds while the final word plays.
+5. **Listens to the result** (`ScriptReadback`): transcribes the output, checks every line is
+   heard where the plan put it, that no beat's closing words open the next, that the speaker's
+   actual closing words survive, that the hook is heard once, and that every caption is heard while
+   it is shown.
+6. **Measures the result against the reference** (`ReferenceComparison`): labels on every band,
+   face size within tolerance, captions present, no band faceless for longer than the reference's.
+7. **Exits non-zero if any of that fails.** The file exists; it is not the edit.
+
+`sharpy readback <script> <source> <output> [--reference]` runs 5 and 6 on an existing file.
+
+Measured on the user's recording: 13/13 lines heard in order, 0 repeated, 0 chopped, 111/111
+captions heard while shown, all three bands labelled, faceless stretch 0.0 s on every band.
+Rendering went from 9 fps to 288 fps: three tracks shared one decoder and seeked three times per
+frame; each track now has its own.
+
+Still open: the model-adjudicated self-correction is not wired into `assemble`; captions are
+plain word groups (the reference emphasises one word per group in a second colour); no graphics.
