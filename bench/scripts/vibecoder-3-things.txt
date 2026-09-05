@@ -1,0 +1,56 @@
+[hook- that makes the echo]Every vibecoder must know these 3 things.
+
+[1st cut - top]First folders.
+
+[2nd cut- center]Second: instruction files.
+
+[3rd cut- bottom]Third: hooks.
+
+[4th cut- top]
+This sounds basic, but it makes a huge difference.
+Don't dump everything into random folders and expect your AI to figure it out.
+Keep your components, services, tests, docs, and assets organized.
+
+[5th cut - center]
+CLAUDE.md or AGENTS.md.
+This is where you tell your agent what it needs to remember.
+Your stack.
+Your key rules.
+How to run and test the project.
+Important constraints.
+
+[6th cut - bottom]
+This is probably the most underused one.
+If there's something you keep telling your agent to do...
+Stop telling it.
+Automate it with a hook.
+
+[7th cut - top]
+Your codebase is context for your agent.
+Make it easy to understand.
+
+[8th cut - center]
+But don't write a 1,000-line instruction manual.
+Keep it precise.
+Put the things it needs every time in there.
+For everything else, point it to deeper documentation.
+Think of it as a map, not the whole encyclopedia.
+
+[9th cut - botom]
+Run tests.
+Format code.
+Validate changes.
+Check files.
+If you keep asking your agent to do the same thing, automate it.
+
+[10th cut - top]
+The best vibecoding setup isn't about writing better prompts.
+
+[11th cut - center]
+It's about giving your agent the right context.
+
+[12th cut - botom]
+And making the boring stuff happen automatically.
+
+[13th cut - center]
+Follow for more practical AI coding tips.

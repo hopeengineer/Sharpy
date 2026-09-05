@@ -68,6 +68,67 @@ public struct LayoutAnalysis: Sendable {
 
     public var isSplitScreen: Bool { panels > 1 && panelSimilarity > 0.55 }
 
+    /// One stretch where a single panel holds the floor.
+    public struct Visit: Sendable {
+        public let panel: Int
+        public let start: Double, end: Double
+        public var seconds: Double { end - start }
+    }
+
+    /// The order the edit visits its panels, and how long it stays each time.
+    ///
+    /// This is the mechanic that makes the format work, and it is invisible to any single frame: the
+    /// reference does not present top, then middle, then bottom once. It RETURNS to each of them
+    /// several times, and each return adds another piece — introduce, tease, explain, deepen, pay
+    /// off. That rhythm is the reason it holds attention, and it is entirely a property of the
+    /// sequence rather than of the layout.
+    ///
+    /// A panel holds the floor when it is the only one moving. Stretches where several move are the
+    /// echo opening and belong to no single panel.
+    public var visits: [Visit] {
+        guard isSplitScreen, let n = activity.first?.motion.count, n > 0 else { return [] }
+        var out: [Visit] = []
+        var current: (panel: Int, start: Int)?
+        func time(_ i: Int) -> Double { (sampledAt.first ?? 0) + Double(i) * secondsPerSample }
+
+        for i in 0..<n {
+            let moving = activity.filter { i < $0.motion.count && $0.motion[i] > $0.threshold }
+            let holder = moving.count == 1 ? moving[0].index : nil
+            if let holder, current?.panel == holder { continue }
+            if let open = current {
+                // Ignore flickers: a panel that "holds the floor" for a fifth of a second is a
+                // measurement artefact, not an edit.
+                if time(i) - time(open.start) >= 0.4 {
+                    out.append(Visit(panel: open.panel, start: time(open.start), end: time(i)))
+                }
+                current = nil
+            }
+            if let holder { current = (holder, i) }
+        }
+        if let open = current, time(n) - time(open.start) >= 0.4 {
+            out.append(Visit(panel: open.panel, start: time(open.start), end: time(n)))
+        }
+        // Merge consecutive turns by the same panel. A speaker pausing mid-sentence stops the
+        // picture moving for a moment, and counting that as a new visit turned one turn into three
+        // — which inflates the return count, the very number this is here to measure.
+        var merged: [Visit] = []
+        for visit in out {
+            if let last = merged.last, last.panel == visit.panel, visit.start - last.end < 1.2 {
+                merged[merged.count - 1] = Visit(panel: last.panel, start: last.start, end: visit.end)
+            } else {
+                merged.append(visit)
+            }
+        }
+        return merged
+    }
+
+    /// How many separate times each panel takes the floor. More than one means the edit RETURNS.
+    public var returnsPerPanel: [Int: Int] {
+        var counts: [Int: Int] = [:]
+        for visit in visits { counts[visit.panel, default: 0] += 1 }
+        return counts
+    }
+
     /// The stretch at the start where every panel runs at once, in seconds.
     ///
     /// Reported as a RANGE rather than a percentage because "16% of the piece" is true of an
@@ -118,6 +179,21 @@ public struct LayoutAnalysis: Sendable {
                          + " — the same delivery offset between panels, which is what reads as several voices")
         }
         lines.append(String(format: "  all panels move together %.0f%% of the time", simultaneousFraction * 100))
+        let sequence = visits
+        if !sequence.isEmpty {
+            let counts = returnsPerPanel
+            let order = sequence.map { "\($0.panel + 1)" }.joined(separator: " → ")
+            lines.append("  ORDER: \(order)")
+            let returning = counts.filter { $0.value > 1 }
+            if !returning.isEmpty {
+                lines.append("  RETURNS: " + counts.sorted { $0.key < $1.key }
+                    .map { "panel \($0.key + 1) takes the floor \($0.value)×" }.joined(separator: ", "))
+                lines.append("  The edit does not present each panel once — it goes BACK to them, and each "
+                             + "return adds another piece. That rhythm is the format, not the split.")
+            }
+            let average = sequence.reduce(0.0) { $0 + $1.seconds } / Double(sequence.count)
+            lines.append(String(format: "  each turn lasts %.1f s on average", average))
+        }
         if let opening = simultaneousOpening {
             lines.append(String(format: "  OPENING: all %d panels run together for the first %.1f s, then they take turns — "
                                 + "that is the hook, and it is why the audio reads as several voices",

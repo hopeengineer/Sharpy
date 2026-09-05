@@ -531,6 +531,90 @@ case "speakers":
         for t in changes.prefix(10) { print(String(format: "     %7.2f", t.seconds.doubleValue)) }
     } catch { fail("speakers: \(error)") }
 
+case "script":
+    // sharpy script <script.txt> <video>  — where each scripted cut actually falls
+    let args = Array(argv.dropFirst())
+    guard args.count >= 2 else { fail("usage: sharpy script <script.txt> <video>") }
+    do {
+        guard #available(macOS 26.0, *) else { fail("script needs macOS 26") }
+        let text = try String(contentsOfFile: args[0], encoding: .utf8)
+        let parsed = CutScript.parse(text)
+        print(parsed.summary)
+        let url = URL(fileURLWithPath: args[1])
+        let transcript = try await2 {
+            try await ParakeetIndexer().transcribe(url: url, asset: NodeID(contentOf: args[1]))
+        }
+        print("\nwhere each cut falls in \(url.lastPathComponent):")
+        var missing = 0
+        for (cut, range, score) in CutScript.locate(parsed, in: transcript) {
+            if let range {
+                print(String(format: "  %2d %-6@ %6.2f–%6.2f s  (match %.0f%%)  \"%@\"",
+                             cut.order, cut.panel.rawValue as CVarArg,
+                             range.start.seconds.doubleValue, range.end.seconds.doubleValue,
+                             score * 100, cut.text.prefix(42) as CVarArg))
+            } else {
+                missing += 1
+                print(String(format: "  %2d %-6@   NOT FOUND in the recording  \"%@\"",
+                             cut.order, cut.panel.rawValue as CVarArg, cut.text.prefix(42) as CVarArg))
+            }
+        }
+        if missing > 0 {
+            print("\n  \(missing) scripted line(s) were not found. Either they were not recorded, or they were said differently — worth checking before cutting.")
+        }
+        let located = CutScript.locate(parsed, in: transcript)
+        let clashes = CutScript.collisions(located)
+        if !clashes.isEmpty {
+            print("\n  \(clashes.count) pair(s) of lines resolved to the same moment — one moment cannot be two cuts:")
+            for (a, b) in clashes.prefix(5) {
+                print("     · cut \(a.order) \"\(a.text.prefix(30))\" and cut \(b.order) \"\(b.text.prefix(30))\"")
+            }
+        }
+    } catch { fail("script: \(error)") }
+
+case "match":
+    // sharpy match <reference> <your video>
+    // Work out the edit from the two videos, without being told what the format is.
+    let rest = Array(argv.dropFirst())
+    guard rest.count >= 2 else { fail("usage: sharpy match <reference> <your video>") }
+    do {
+        guard #available(macOS 26.0, *) else { fail("match needs macOS 26") }
+        let reference = URL(fileURLWithPath: rest[0]), subject = URL(fileURLWithPath: rest[1])
+        let t0 = Date()
+        let subjectTranscript = try await2 {
+            try await ParakeetIndexer().transcribe(url: subject, asset: NodeID(contentOf: rest[1]))
+        }
+        let referenceTranscript = try? await2 {
+            try await ParakeetIndexer().transcribe(url: reference, asset: NodeID(contentOf: rest[0]))
+        }
+        let store = try? IndexStore()
+        let plan = try FormatMatcher.plan(
+            reference: reference, subject: subject,
+            referenceTranscript: referenceTranscript,
+            subjectTranscript: subjectTranscript,
+            subjectVision: try? store?.vision(for: subject).0,
+            subjectSpeech: try? SilenceDetector.analyse(url: subject))
+        print(plan.summary)
+        print(String(format: "\n  (worked out in %.1f s from the two videos alone)", Date().timeIntervalSince(t0)))
+    } catch { fail("match: \(error)") }
+
+case "sections":
+    // sharpy sections <file> [--count 3]
+    // Where the piece changes subject, and what to call each part — from the speaker's own words.
+    guard let path = argv.dropFirst().first else { fail("usage: sharpy sections <file> [--count 3]") }
+    do {
+        guard #available(macOS 26.0, *) else { fail("sections needs macOS 26") }
+        let url = URL(fileURLWithPath: path)
+        let count = Int(option("--count") ?? "3") ?? 3
+        let transcript = try await2 {
+            try await ParakeetIndexer().transcribe(url: url, asset: NodeID(contentOf: path))
+        }
+        let analysis = SectionFinder.find(in: transcript, count: count)
+        print(analysis.summary)
+        for section in analysis.sections {
+            print("     terms: \(section.terms.joined(separator: ", "))")
+        }
+    } catch { fail("sections: \(error)") }
+
 case "layout":
     // sharpy layout <reference> — what FORMAT is this edit?
     //
@@ -938,6 +1022,9 @@ default:
       sharpy report <file> [--fps N]
       sharpy look <file> [--fps N] [--fast]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--color <space>] [--ids]
+      sharpy script <script.txt> <video>     — where each scripted cut falls
+      sharpy match <reference> <your video>  — work out the edit from both, unaided
+      sharpy sections <file> [--count 3]  — where it changes subject, and what to call each part
       sharpy layout <reference>   — what format is this edit?
       sharpy takes <file> [--engine parakeet|whisper|voted] [--assemble out.mov] [--codec h264|hevc|prores]
       sharpy enhance <file> --out <file.wav> [--preset studio|noisy]
