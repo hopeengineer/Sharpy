@@ -139,7 +139,13 @@ public struct EveryDecisionHasABasis: Assertion {
     public let category = AssertionCategory.provenance
     public let mode = AssertionMode.block
     public func evaluate(_ c: VerificationContext) -> [AssertionFailure] {
-        c.document.decisionOrder.compactMap { id in
+        // `decisionOrder` holds one entry per TRACK APPLICATION — that is how `uniqueDecisions`
+        // counts them — so iterating it directly reports one editorial act once per track. A cut
+        // applied to picture and sound became two identical findings, and on a six-track edit it
+        // would become six, inflating the review queue toward "not selective" for no reason.
+        var seen = Set<NodeID>()
+        return c.document.decisionOrder.compactMap { id in
+            guard seen.insert(id).inserted else { return nil }
             guard c.document.decisions[id] == nil else { return nil }
             return AssertionFailure(assertion: name, category: category, mode: mode,
                                     detail: "decision \(id) is referenced in the record but has no entry", at: nil)
@@ -153,8 +159,8 @@ public struct NoDecisionBelowTheConfidenceFloor: Assertion {
     public let category = AssertionCategory.provenance
     public let mode = AssertionMode.block
     public func evaluate(_ c: VerificationContext) -> [AssertionFailure] {
-        c.document.decisionOrder.compactMap { id in
-            guard let d = c.document.decisions[id], d.basis.confidence < c.document.confidenceFloor else { return nil }
+        c.document.uniqueDecisions.compactMap { (_, d, _) in
+            guard d.basis.confidence < c.document.confidenceFloor else { return nil }
             return AssertionFailure(assertion: name, category: category, mode: mode,
                                     detail: "\(d.kind.rawValue) rests on \(d.basis.confidence) against a floor of \(c.document.confidenceFloor)",
                                     at: d.at)
@@ -172,8 +178,8 @@ public struct SafetyConstraintsAreNotOverridden: Assertion {
     public let mode = AssertionMode.block
     public func evaluate(_ c: VerificationContext) -> [AssertionFailure] {
         // A decision that supersedes a safety-constrained one must itself be safety-constrained.
-        c.document.decisionOrder.compactMap { id in
-            guard let d = c.document.decisions[id], let supersededID = d.supersedes,
+        c.document.uniqueDecisions.compactMap { (_, d, _) in
+            guard let supersededID = d.supersedes,
                   let superseded = c.document.decisions[supersededID] else { return nil }
             guard case .safetyConstraint = superseded.basis else { return nil }
             if case .safetyConstraint = d.basis { return nil }
@@ -333,8 +339,9 @@ public struct LowConfidenceDecisionsHoldTheRender: Assertion {
     public let category = AssertionCategory.provenance
     public let mode = AssertionMode.hold
     public func evaluate(_ c: VerificationContext) -> [AssertionFailure] {
-        c.document.decisionOrder.compactMap { id in
-            guard let d = c.document.decisions[id] else { return nil }
+        // One editorial act, one finding — see EveryDecisionHasABasis for why this is not
+        // `decisionOrder`.
+        c.document.uniqueDecisions.compactMap { (_, d, _) in
             let conf = d.basis.confidence
             guard !(conf < c.document.confidenceFloor), conf < c.shipConfidence else { return nil }
             return AssertionFailure(assertion: name, category: category, mode: mode,

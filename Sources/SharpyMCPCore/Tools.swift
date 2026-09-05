@@ -213,6 +213,24 @@ public let tools: [[String: Any]] = [
                         "required": []],
     ],
     [
+        "name": "inspect_cuts",
+        "description": "Watch your own edit at the places it can fail. A cut succeeds or fails AT ITS BOUNDARY, and one screenshot from the middle of a shot proves nothing about it. This renders the current timeline and, for every cut, measures how far the picture jumped, whether the audio steps discontinuously (an audible click), whether a shot is too short to register, and whether the join reads as a jump cut. It also writes a CONTACT SHEET — several frames either side of each cut in one image, with the join marked — which you can open and look at when the numbers do not settle it. Call this after an edit and before you tell anyone it worked.",
+        "inputSchema": ["type": "object",
+                        "properties": ["out": ["type": "string", "description": "Where to render for inspection. A temporary path is fine; this is not the deliverable."],
+                                       "contactSheet": ["type": "string", "description": "Optional path for the PNG contact sheet. Omit if the measurements are enough."]],
+                        "required": ["out"]],
+    ],
+    [
+        "name": "move_segment",
+        "description": "Move a passage of the piece somewhere else — the structural edit. Address it by WORD INDEX from get_transcript ('move words 40–72 to before word 5'), so you are naming meaning rather than doing frame arithmetic. Every track moves together, so picture and sound stay in sync. Destination is given in the timeline you can see right now, before the move. This is how you put the hook at the top or bring a payoff earlier; without it you can only ever delete.",
+        "inputSchema": ["type": "object",
+                        "properties": ["fromWord": ["type": "number", "description": "First word of the passage to move."],
+                                       "toWord": ["type": "number", "description": "Last word of the passage, inclusive."],
+                                       "beforeWord": ["type": "number", "description": "Put the passage so it begins where this word currently begins. Use 0 for the very top."],
+                                       "why": ["type": "string", "description": "The reason this passage belongs there. Recorded as the decision's basis; a move without one does not render."]],
+                        "required": ["fromWord", "toWord", "beforeWord", "why"]],
+    ],
+    [
         "name": "cut_diff",
         "description": "What actually changed, in the source material's own timecodes. Diffs the current edit against an earlier revision — 'removed 2.00 s (100.00–102.00 s of source)' rather than a list of commands. Source time is used because cutting near the top shifts every later timecode, so a timeline diff reports the whole piece as changed when one cut moved. Changes are ordered largest first. Use it to show a person what you did before asking them to approve it.",
         "inputSchema": ["type": "object",
@@ -372,7 +390,14 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 nonisolated(unsafe) var produced: Transcript?
                 nonisolated(unsafe) var failure: Error?
                 Task {
-                    do { produced = try await session.store.transcript(for: url).0 } catch { failure = error }
+                    // The VOTED transcript, not Apple's. Apple normalises disfluencies away — on
+                    // this repo's reference audio it keeps 8 of 12 fillers, and on the author's
+                    // reel it reported none at all, so `remove_words fillers=true` told the agent
+                    // there was nothing to cut from narration that audibly contains it. Every
+                    // downstream tool here needs verbatim words and a per-word confidence, and
+                    // Apple supplies neither. Its speed only matters for live preview, which this
+                    // surface is not.
+                    do { produced = try await session.store.votedTranscript(for: url).0 } catch { failure = error }
                     sem.signal()
                 }
                 sem.wait()
@@ -629,6 +654,105 @@ public func runTool(_ name: String, _ args: JSONValue?, _ session: Session) -> [
                 else { lines.append("autonomy: no completed videos recorded yet — the cross-video trend starts once one is") }
             }
             return toolResult(lines.joined(separator: "\n"))
+
+        case "inspect_cuts":
+            let doc = try session.requireDocument()
+            guard let mediaURL = session.mediaURL else { throw SessionError.noMediaOpen }
+            guard let outPath = args?["out"]?.stringValue, !outPath.isEmpty else {
+                return toolResult("inspect_cuts needs 'out' — somewhere to render for inspection", isError: true)
+            }
+            let probe = try? SequentialFrameSource(url: mediaURL)
+            // Inspection deliberately SKIPS the delivery gate. You inspect in order to judge a
+            // hold; refusing to let the agent look until the edit already passes makes looking
+            // useless exactly when it is needed. What the gate said is reported instead of hidden.
+            let options = RenderOptions(width: probe?.width ?? 1920, height: probe?.height ?? 1080,
+                                        sampleRate: session.sampleRate, skipVerification: true)
+            let renderURL = URL(fileURLWithPath: outPath)
+            _ = try RenderSession(document: doc, options: options).render(to: renderURL)
+            let gate = Verifier.standard.verify(VerificationContext(document: doc))
+            let sheetURL = args?["contactSheet"]?.stringValue.map { URL(fileURLWithPath: $0) }
+            // Vision supplies the on-screen text, which is what catches the failure the luma
+            // check cannot see: a caption or graphic cut mid-display while the picture holds still.
+            let visionIndex = try? session.store.vision(for: mediaURL).0
+            // Vision is keyed by SOURCE time; the inspection walks the RENDERED timeline. After a
+            // move these disagree, and querying with a timeline instant returns facts about the
+            // wrong part of the footage — which reads as "nothing wrong" rather than as an error.
+            let textAt: CutInspector.TextAt? = visionIndex.map { index in
+                { timelineTime in
+                    guard let source = doc.videoClip(at: timelineTime)?.sourceTime else { return [] }
+                    return Set(index.observation(at: source)?.text.map(\.text) ?? [])
+                }
+            }
+            let inspection = try CutInspector().inspect(rendered: renderURL, document: doc,
+                                                        rate: session.frameRate,
+                                                        contactSheetTo: sheetURL,
+                                                        textAt: textAt)
+            // Said plainly when there is nothing to report, because "no cuts worth a look" and
+            // "the inspection did not run" must not read the same.
+            var lines = [inspection.summary]
+            if !gate.canRender {
+                lines.append("Note: this edit would NOT ship as it stands — \(gate.summary). Inspecting it anyway is the point; decide after you have looked.")
+                for f in (gate.blocking + gate.holds).prefix(5) { lines.append("  \(f.description)") }
+            }
+            if inspection.observations.isEmpty {
+                lines.append("This timeline has no cuts yet — there is nothing to inspect, which is not the same as nothing being wrong.")
+            } else if inspection.worthALook.isEmpty {
+                lines.append("Every cut measured clean. Open the contact sheet if you want to see them.")
+            }
+            return toolResult(lines.joined(separator: "\n"))
+
+        case "move_segment":
+            let transcript = try session.requireTranscript()
+            guard var log = session.log else { throw SessionError.noMediaOpen }
+            guard let fromWord = args?["fromWord"]?.intValue,
+                  let toWord = args?["toWord"]?.intValue,
+                  let beforeWord = args?["beforeWord"]?.intValue,
+                  let why = args?["why"]?.stringValue, !why.isEmpty else {
+                return toolResult("move_segment needs fromWord, toWord, beforeWord and why", isError: true)
+            }
+            guard fromWord <= toWord else {
+                return toolResult("fromWord must not be after toWord", isError: true)
+            }
+            let words = transcript.words
+            func word(_ i: Int) -> Word? { words.first { $0.index == i } }
+            guard let head = word(fromWord), let tail = word(toWord) else {
+                return toolResult("no such word — the transcript has \(words.count) words, 0–\(words.count - 1)", isError: true)
+            }
+            // A destination beyond the last word means the end of the piece; 0 means the very top.
+            let destination: TimeValue = beforeWord <= 0 ? .zero
+                : (word(beforeWord)?.range.start ?? log.head.timeline.duration)
+            let rate = session.frameRate
+            let vFrom = TimeValue(frames: head.range.start.nearestFrame(at: rate), at: rate)
+            let vTo = TimeValue(frames: tail.range.end.nearestFrame(at: rate), at: rate)
+            let vAt = TimeValue(frames: destination.nearestFrame(at: rate), at: rate)
+            guard vFrom < vTo else { return toolResult("that passage has no duration", isError: true) }
+            if vFrom <= vAt && vAt <= vTo {
+                return toolResult("that destination is inside the passage being moved — it cannot be both lifted and still there", isError: true)
+            }
+            // A restructure is the agent's own reading of the piece, so it is a structural
+            // inference and NOT a measurement. Saying otherwise would let a rearrangement inherit
+            // the authority of the transcript it was navigated with.
+            let basis = Basis.structuralInference(
+                evidence: ["words \(fromWord)–\(toWord)", why], confidence: Rational(3, 4))
+            let before = log.head.timeline.duration
+            let decision = Decision(kind: .structure, at: vAt,
+                                    params: ["moved": "\(fromWord)–\(toWord)", "why": why],
+                                    basis: basis)
+            for (i, track) in log.head.timeline.tracks.enumerated() {
+                // Each track keeps its own grid: video on frames, audio on samples. At 29.97 a
+                // frame is 1601.6 samples, so a shared boundary would put audio off its grid.
+                let from = track.kind == .video ? vFrom : vFrom.alignedToSample(at: session.sampleRate)
+                let to = track.kind == .video ? vTo : vTo.alignedToSample(at: session.sampleRate)
+                let at = track.kind == .video ? vAt : vAt.alignedToSample(at: session.sampleRate)
+                _ = try log.append(.moveRange(track: i, range: TimeRange(start: from, end: to),
+                                              to: at, decision: decision))
+            }
+            session.log = log
+            let after = log.head.timeline.duration
+            let moved = (vTo - vFrom).seconds.doubleValue
+            return toolResult(String(format: "moved %.2f s (words %d–%d) to %.2f s. Duration %.2f s → %.2f s (a move loses nothing).\nCall cut_diff to see it, or review_queue before you ship it.",
+                                     moved, fromWord, toWord, vAt.seconds.doubleValue,
+                                     before.seconds.doubleValue, after.seconds.doubleValue))
 
         case "cut_diff":
             let current = try session.requireDocument()

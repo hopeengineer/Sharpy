@@ -308,6 +308,13 @@ public enum Command: Sendable, Codable, Equatable {
     /// decision all the same — a picture-in-picture that covers a face is an edit, and an edit
     /// without a basis does not render.
     case placeInFrame(track: Int, clipIndex: Int, placement: ClipPlacement?, decision: Decision)
+    /// Lift [range) out of a track and reinsert it so it begins at `to`, rippling both sides.
+    ///
+    /// This is the structural edit — "move the payoff earlier", "put the hook at the top" — and
+    /// without it an agent can only ever subtract. `to` is given in the timeline the caller can
+    /// SEE, before the lift, because making the caller predict where things land after material is
+    /// removed is exactly the frame arithmetic they are supposed to be freed from.
+    case moveRange(track: Int, range: TimeRange, to: TimeValue, decision: Decision)
     /// Record a decision that changes no clip geometry (colour, sound cue, graphic).
     case recordDecision(Decision)
 }
@@ -323,6 +330,7 @@ public enum ApplyError: Error, Equatable, CustomStringConvertible {
     case notSampleAligned(TimeValue, Int)
     case belowConfidenceFloor(basis: Basis, floor: Rational)
     case emptyRange
+    case destinationInsideMovedRange(TimeRange, TimeValue)
 
     public var description: String {
         switch self {
@@ -336,6 +344,8 @@ public enum ApplyError: Error, Equatable, CustomStringConvertible {
         case .notSampleAligned(let t, let sr): return "\(t) is not on a sample boundary at \(sr) Hz"
         case .belowConfidenceFloor(let b, let f): return "basis confidence \(b.confidence) is below the project floor \(f)"
         case .emptyRange: return "empty range"
+        case .destinationInsideMovedRange(let r, let t):
+            return "cannot move \(r) to \(t): the destination is inside the range being moved"
         }
     }
 }
@@ -413,6 +423,87 @@ extension Document {
             let d = replacing(track: trackIndex, with: Track(kind: track.kind, name: track.name, clips: out)).recording(decision)
             return (d.0, Delta(before: before, after: d.0.id, decision: d.1, shiftedTracks: [trackIndex]))
 
+        case .moveRange(let trackIndex, let range, let destination, let decision):
+            try check(decision)
+            guard timeline.tracks.indices.contains(trackIndex) else { throw ApplyError.noSuchTrack(trackIndex) }
+            guard !range.isEmpty else { throw ApplyError.emptyRange }
+            let track = timeline.tracks[trackIndex]
+            try requireAligned(range.start, on: track.kind)
+            try requireAligned(range.end, on: track.kind)
+            try requireAligned(destination, on: track.kind)
+            // Landing inside the range being moved has no meaning: the material would have to be
+            // both lifted and still there. Refusing beats silently doing something defensible.
+            guard !range.contains(destination), destination != range.end else {
+                throw ApplyError.destinationInsideMovedRange(range, destination)
+            }
+
+            // Lift: the clips wholly or partly inside the range, rebased so the lifted block
+            // starts at zero.
+            var lifted: [Clip] = []
+            for c in track.clips {
+                guard let cut = c.range.intersection(range) else { continue }
+                let offsetIntoClip = cut.start - c.start
+                lifted.append(Clip(asset: c.asset,
+                                   source: TimeRange(start: c.source.start + offsetIntoClip,
+                                                     duration: cut.duration),
+                                   start: cut.start - range.start,
+                                   placement: c.placement))
+            }
+            guard !lifted.isEmpty else { throw ApplyError.emptyRange }
+
+            // Everything else, with the hole closed — the same arithmetic rippleDelete does.
+            var remaining: [Clip] = []
+            for c in track.clips {
+                guard let cut = c.range.intersection(range) else {
+                    remaining.append(!(range.end > c.start)
+                        ? Clip(asset: c.asset, source: c.source, start: c.start - range.duration, placement: c.placement)
+                        : c)
+                    continue
+                }
+                if c.start < cut.start {
+                    remaining.append(Clip(asset: c.asset,
+                                          source: TimeRange(start: c.source.start, duration: cut.start - c.start),
+                                          start: c.start, placement: c.placement))
+                }
+                if cut.end < c.end {
+                    let tailOffset = cut.end - c.start
+                    remaining.append(Clip(asset: c.asset,
+                                          source: TimeRange(start: c.source.start + tailOffset, end: c.source.end),
+                                          start: cut.end - range.duration, placement: c.placement))
+                }
+            }
+
+            // The destination was named in the ORIGINAL timeline, so it shifts left by the lifted
+            // duration when it sat after the material that was removed.
+            let landing = destination > range.start ? destination - range.duration : destination
+
+            // Insert: everything at or after the landing point moves right to make room. A clip
+            // straddling the landing point is split, because an insert edit that silently landed
+            // on the nearest clip boundary would be a different edit from the one asked for.
+            var out: [Clip] = []
+            for c in remaining {
+                if !(c.start < landing) {
+                    out.append(Clip(asset: c.asset, source: c.source, start: c.start + range.duration, placement: c.placement))
+                } else if landing < c.range.end {
+                    let headDuration = landing - c.start
+                    out.append(Clip(asset: c.asset,
+                                    source: TimeRange(start: c.source.start, duration: headDuration),
+                                    start: c.start, placement: c.placement))
+                    out.append(Clip(asset: c.asset,
+                                    source: TimeRange(start: c.source.start + headDuration, end: c.source.end),
+                                    start: landing + range.duration, placement: c.placement))
+                } else {
+                    out.append(c)
+                }
+            }
+            out += lifted.map {
+                Clip(asset: $0.asset, source: $0.source, start: landing + ($0.start - .zero), placement: $0.placement)
+            }
+            out.sort { $0.start < $1.start }
+
+            let moved = replacing(track: trackIndex, with: Track(kind: track.kind, name: track.name, clips: out)).recording(decision)
+            return (moved.0, Delta(before: before, after: moved.0.id, decision: moved.1, shiftedTracks: [trackIndex]))
+
         case .placeInFrame(let trackIndex, let clipIndex, let placement, let decision):
             try check(decision)
             guard timeline.tracks.indices.contains(trackIndex) else { throw ApplyError.noSuchTrack(trackIndex) }
@@ -466,6 +557,21 @@ extension Document {
 // MARK: - Command log
 
 extension Document {
+    /// The topmost video clip covering `t`, with the SOURCE instant it maps to.
+    ///
+    /// Needed by anything that measures a rendered timeline against a perception index, because
+    /// those indexes are keyed by source time. After a move or a ripple delete the two no longer
+    /// agree, and querying a source-keyed index with a timeline instant silently returns facts
+    /// about the wrong part of the footage — which reads as "nothing wrong" rather than as an error.
+    public func videoClip(at t: TimeValue) -> (trackIndex: Int, clip: Clip, sourceTime: TimeValue)? {
+        for (i, track) in timeline.tracks.enumerated().reversed() where track.kind == .video {
+            if let clip = track.clips.first(where: { $0.range.contains(t) }) {
+                return (i, clip, clip.source.start + (t - clip.start))
+            }
+        }
+        return nil
+    }
+
     /// Every audio track's clip covering `t`, with the source instant it maps to.
     /// Unlike video these are summed, not stacked, so order carries no z-meaning.
     public func audioClips(at t: TimeValue) -> [(trackIndex: Int, clip: Clip, sourceTime: TimeValue)] {
