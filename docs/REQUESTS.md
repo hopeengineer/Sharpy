@@ -248,3 +248,33 @@ difference between the feature working and not.
    (takes within one file), §13 (the cinematic look, by comparing unedited against edited), and the
    4K throughput figure the plan claims but this machine cannot currently verify.
 2. **A reference video** they want an edit to look like — to validate §4 and §5 end to end.
+
+### Context over pattern matching — the local model reading the transcript
+
+> *"that's why I have been saying this should be full context aware editing not pattern matching"*
+
+String matching finds a restart by seeing the same words twice. It cannot tell a fumble from a line
+somebody repeated on purpose, because both look identical to it. A local model reading the words is
+the only thing that can, so one was measured rather than assumed:
+
+| asked | score on 12 known cases | what it actually did |
+| --- | --- | --- |
+| "did the speaker abandon this?" (yes/no) | 6/12 | answered CUT **12 times out of 12** — no information |
+| a choice between two named alternatives | 6/12 | 4 of 6 deliberate repetitions kept; wrong cuts 6 → 1 |
+
+Same score, opposite behaviour — which is why the control set exists at all. The model is good at
+recognising speech somebody meant to say and poor at spotting a fumble, so it gets that half only:
+
+- it may **veto** a cut the measurement proposed, never propose one;
+- the two passes swap the option order, and an answer that moves with the options is discarded;
+- a veto does not stand against a strong measurement — a retry inside 1.0 s that repeats two thirds
+  of the words is somebody catching themselves, and the basis hierarchy already says
+  `measuredMaterial` outranks `structuralInference`.
+
+On the 10-minute recording: 18 candidates, 15 cut, 3 vetoed, 3 further vetoes overruled by the
+measurement. Two of the three survivors are the same thesis line at 452 s and 599 s — one sentence
+the speaker deliberately came back to, which no amount of string comparison could have told apart
+from a stumble.
+
+Still open: the model is 2/6 at finding fumbles unaided, so it adds nothing to detection. Every
+veto is recorded and reviewable rather than applied silently.

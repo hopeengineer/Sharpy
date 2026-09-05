@@ -23,10 +23,12 @@ let package = Package(
         .library(name: "SharpyPerception", targets: ["SharpyPerception"]),
         .library(name: "SharpySemantics", targets: ["SharpySemantics"]),
         .library(name: "SharpyMCPCore", targets: ["SharpyMCPCore"]),
+        .library(name: "SharpyReasoning", targets: ["SharpyReasoning"]),
         .executable(name: "sharpy", targets: ["SharpyCLI"]),
         .executable(name: "sharpy-probe", targets: ["SharpyPerceptionProbe"]),
         .executable(name: "sharpy-mcp", targets: ["SharpyMCP"]),
         .executable(name: "sharpy-scene", targets: ["SharpySceneCLI"]),
+        .executable(name: "sharpy-reason", targets: ["SharpyReasonCLI"]),
     ],
     dependencies: [
         // Local VLM/LLM inference (Qwen3-VL, Gemma 4 registered in VLMModelFactory). Pinned.
@@ -101,6 +103,33 @@ let package = Package(
             name: "SharpySceneCLI",
             dependencies: ["SharpyEngine", "SharpyPerception", "SharpySemantics"],
             path: "Sources/SharpySceneCLI",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // Reading a transcript for MEANING, where string comparison runs out. Pure logic here —
+        // prompt, parse, verify — so it tests under plain `swift build`; the model call itself
+        // lives in the MLX-linked executable, which needs xcodebuild.
+        .target(
+            name: "SharpyReasoning",
+            dependencies: ["SharpyEngine"],
+            path: "Sources/SharpyReasoning",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // The model that READS. Linked against MLX, so it needs xcodebuild — which is why it is a
+        // separate executable rather than part of the main CLI.
+        .executableTarget(
+            name: "SharpyReasonCLI",
+            dependencies: [
+                "SharpyEngine", "SharpyPerception", "SharpyReasoning",
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                // The tokenizer-loader macro expands against these two by name; without them the
+                // expansion fails with "cannot find 'Tokenizers' in scope", which says nothing
+                // about a missing dependency.
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ],
+            path: "Sources/SharpyReasonCLI",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         // The agent surface. Tools live in a library so they can be tested without a process;

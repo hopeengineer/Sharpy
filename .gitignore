@@ -11,3 +11,6 @@ bench/.venv/
 bench/models/
 *.log
 Package.resolved
+
+# xcodebuild derived data — MLX targets are built here, never committed
+.xcbuild/

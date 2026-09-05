@@ -29,6 +29,12 @@ public struct Correction: Sendable {
 
     public var seconds: Double { abandoned.duration.seconds.doubleValue }
 
+    /// Silence between giving up and starting again. Short gaps are the strongest evidence there
+    /// is: somebody catching themselves does not pause to think about it first.
+    public var gapSeconds: Double {
+        kept.start.seconds.doubleValue - abandoned.end.seconds.doubleValue
+    }
+
     public var description: String {
         String(format: "%6.2f–%6.2f s  cut \"%@\" (%.0f%% match to the retry that follows)",
                abandoned.start.seconds.doubleValue, abandoned.end.seconds.doubleValue,
