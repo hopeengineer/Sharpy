@@ -178,6 +178,58 @@ Correct, and it caught a real defect in take selection as it was being written. 
 to confirm — with the warning threshold deliberately looser than the merge threshold, so it fires
 before any merge would. Two tests pin it.
 
+## 13. Cinematic filters / looks — **open, next**
+
+> "You also need to add cinematic filters. The one I'm sharing is the unedited one; the one you've
+> been checking is the edited one — it has a cinematic filter, which is why it looks yellowish,
+> clean and nice."
+
+Nothing built. The colour infrastructure is there and unused for this: OCIO 2.5.2 is linked, the
+compositor already injects Metal shader code for colour transforms, and blending is in linear light,
+which is what makes a film curve behave.
+
+A look is a stack of measurable operations — exposure, contrast/film curve, white balance and tint,
+lift/gamma/gain per channel, saturation, split-toning (warm highlights, cool shadows), vignette,
+grain, and halation. Each has a number, so a look is data an agent can author, name, reuse, and be
+held to — not a preset nobody can inspect. `.cube` LUT import/export is the interoperable form.
+
+## 14. The agent builds its own tools as it goes — **designed, and genuinely possible**
+
+> "This agent needs to be able to build tools as it goes and learn according to the job... if you
+> find we don't have enough features to do that edit, the agent will create that feature and
+> integrate it into the system. While the edit happens, the tool improves itself. Can we do that?"
+
+**Yes, for effects — and it is already half-built without being used for this.**
+
+`MetalCompositor` compiles its kernel from a Metal source STRING at runtime
+(`device.makeLibrary(source:)`), and the colour pipeline already injects generated shader code into
+it. So an agent can author a new effect as shader source plus named parameters, have it compiled,
+measured and registered, and use it in the same session. That is real self-extension.
+
+The boundary that keeps it honest, and it is not a limitation but the design:
+
+- An effect is **data** — shader source and typed parameters — never arbitrary Swift. It runs inside
+  the compositor's sandbox on pixels, and it cannot touch the filesystem, the network, or the
+  document.
+- It must **compile, then be measured** before it is usable: throughput against the existing gate,
+  and a known-input/known-output check so an effect that silently produces black is caught.
+- It carries a **basis** like every other decision, and it is `structuralInference` — the agent's own
+  invention is not a measured fact and must not outrank one.
+- Effects the agent writes are **saved and named**, so the second video benefits from the first. That
+  is the same mechanism as `learnedPreference`, applied to capability rather than taste.
+
+## 15. Multi-take inside ONE file — **open, and it changes the design**
+
+> "This is a 10-minute video where I recorded the same thing multiple times."
+
+`TakeSelector` assumes takes arrive as separate files. They do not: the user records **repeated
+attempts inside one continuous recording**. That needs a step before selection — finding the take
+boundaries by detecting repeated passages of the same script within a single transcript, which is
+the same similarity machinery pointed at one file instead of several.
+
+Noted here because it would otherwise be discovered on the day the footage arrives, and it is the
+difference between the feature working and not.
+
 ---
 
 ## Standing instructions
@@ -191,5 +243,8 @@ before any merge would. Two tests pin it.
 
 ## What I most need from the user
 
-1. **5–6 takes of one script** — to validate §3, the highest-value unvalidated feature.
+1. ~~5–6 takes of one script~~ — **arriving**: a 10-minute 4K recording containing repeated takes,
+   plus the edited 1:20 cut made from it. That single file validates §3 (take selection), §15
+   (takes within one file), §13 (the cinematic look, by comparing unedited against edited), and the
+   4K throughput figure the plan claims but this machine cannot currently verify.
 2. **A reference video** they want an edit to look like — to validate §4 and §5 end to end.
