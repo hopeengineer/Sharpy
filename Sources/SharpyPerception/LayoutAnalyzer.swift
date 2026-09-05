@@ -80,6 +80,22 @@ public struct LayoutAnalysis: Sendable {
 
     public var isSplitScreen: Bool { panels > 1 && panelSimilarity > 0.55 }
 
+    /// How far apart consecutive panels run during the opening, in seconds.
+    ///
+    /// `offsets` holds each panel's lag against the first; the step between them is what has to be
+    /// applied when building the same opening from a single take. Averaged over the steps actually
+    /// measured, so one panel the tracker could not lock onto does not lose the whole figure.
+    ///
+    /// Nil when nothing was measured, which stays distinct from a measured zero — panels opening in
+    /// unison is a real answer, and guessing one would put an echo on an edit that has none.
+    public var echoStepSeconds: Double? {
+        let measured = offsets.compactMap { $0 }
+        guard measured.count > 1 else { return nil }
+        let steps = zip(measured.dropFirst(), measured).map { $0 - $1 }.filter { $0 > 0 }
+        guard !steps.isEmpty else { return nil }
+        return steps.reduce(0, +) / Double(steps.count)
+    }
+
     /// One stretch where a single panel holds the floor.
     public struct Visit: Sendable {
         public let panel: Int
@@ -444,13 +460,71 @@ public enum LayoutAnalyzer {
             PanelActivity(index: $0.offset, motion: $0.element, threshold: threshold)
         }
 
-        // How far each panel lags the first.
+        // How far each panel lags the first — measured ONLY across the opening.
+        //
+        // Over the whole piece the panels take turns, so panel 2's motion has nothing to line up
+        // against panel 1's and the correlation returns noise. During the opening they are all
+        // delivering the same line a beat apart, which is the only stretch where a lag between them
+        // is a real quantity. Correlating over everything returned nothing on a reel whose echo is
+        // plainly audible.
         var offsets: [Double?] = []
         let maximumLag = Int((3.0 / interval).rounded())
+        let together = activity.isEmpty ? nil : LayoutAnalysis(
+            motionThreshold: threshold, panels: best.panels, stacked: best.stacked,
+            panelSimilarity: best.similarity, activity: activity, offsets: [],
+            sampledAt: times, secondsPerSample: interval,
+            resumesAfterFreeze: nil, resumeSimilarity: nil).simultaneousOpening
+
+        // The echo is read off the PICTURES, not off the motion.
+        //
+        // Correlating motion asked whether a shifted copy of panel 1's movement matched panel 2's,
+        // and demanded it beat "no shift" by a fifth. During the opening the panels are 94% alike
+        // already, so no shift can win by that much and a plainly audible echo measured as none.
+        //
+        // What is actually true of an echo is simpler and much stronger: panel 2 is SHOWING what
+        // panel 1 showed a moment ago. So panel 0's frame at i is compared against panel k's frame
+        // at i + shift, and the shift that matches best is the lag. Different crops of the frame
+        // never match perfectly, which does not matter — the minimum is what carries the answer,
+        // not its depth.
+        func echoShift(_ panel: Int) -> Int? {
+            guard let together else { return nil }
+            let from = max(Int((together.lowerBound / interval).rounded()), 0)
+            let to = min(Int((together.upperBound / interval).rounded()), best.sigs.count)
+            guard to - from > 6 else { return nil }
+            // An echo is a beat, not a scene: past a second it is two people talking, not one voice
+            // arriving twice.
+            let maximum = min(Int((1.0 / interval).rounded()), (to - from) / 2)
+            guard maximum >= 1 else { return nil }
+            func score(_ shift: Int) -> Double {
+                var sum = 0.0, n = 0
+                for i in from..<to where i + shift >= 0 && i + shift < best.sigs.count {
+                    sum += distance(best.sigs[i][0], best.sigs[i + shift][panel]); n += 1
+                }
+                return n > 4 ? sum / Double(n) : .infinity
+            }
+            let atZero = score(0)
+            var bestShift = 0, bestScore = atZero
+            for shift in 1...maximum {
+                let s = score(shift)
+                if s < bestScore { bestScore = s; bestShift = shift }
+            }
+            // A real lag sits inside the search, not on its edge, and is a visible improvement on
+            // no lag at all. 2% is small because the floor here is the difference between two crops
+            // of the frame, which no shift can remove.
+            guard bestShift > 0, bestShift < maximum, bestScore < atZero * 0.98 else { return nil }
+            return bestShift
+        }
+
         for panel in 0..<best.panels {
             if panel == 0 { offsets.append(0); continue }
-            let shift = lag(activity[0].motion, activity[panel].motion, maximum: maximumLag)
-            offsets.append(shift.map { Double($0) * interval })
+            // The opening first, because that is where an echo lives. Failing that, the turn-taking
+            // lag over the whole piece, which is a different quantity and a weaker one.
+            if let shift = echoShift(panel) {
+                offsets.append(Double(shift) * interval)
+            } else {
+                offsets.append(lag(activity[0].motion, activity[panel].motion, maximum: maximumLag)
+                    .map { Double($0) * interval })
+            }
         }
 
         return LayoutAnalysis(motionThreshold: threshold, panels: best.panels, stacked: best.stacked,

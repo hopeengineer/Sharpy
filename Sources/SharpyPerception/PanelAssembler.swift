@@ -29,6 +29,13 @@ public struct PanelPlan: Sendable {
         public let source: TimeRange
         /// Where it lands in the finished piece.
         public let timeline: TimeRange
+        /// How far behind each panel runs during the opening, per step down the stack.
+        ///
+        /// The hook is not three copies of one frame — the panels say the same words a beat apart,
+        /// which is what makes it read as an echo rather than as a rendering mistake. Rendered with
+        /// no offset it came out as three identical bands, which looks like a bug even though every
+        /// check passed.
+        public let echoStep: TimeValue
         /// What each panel shows: playing this source range, or frozen at this instant.
         public let frozenAt: [Int: TimeValue]
     }
@@ -66,8 +73,21 @@ public enum PanelAssembler {
     ///
     /// - Parameter located: each scripted cut and where it falls in the recording.
     /// - Parameter panels: how many panels the format uses.
+    /// - Parameter frameRate: the grid every time in the plan is snapped to.
+    ///
+    /// Word timings are arbitrary rationals — a boundary at 78/25 s is a real instant but not a
+    /// frame at 30, and a plan that quotes times the renderer cannot use is a plan describing a
+    /// different edit from the one that comes out. So the snapping happens here, where the numbers
+    /// are decided, rather than in the renderer where it would silently disagree with what was
+    /// printed. A beat never rounds to nothing: one frame is the floor.
+    /// - Parameter echo: how far apart the panels run during the opening. Measured off a reference
+    ///   when there is one; zero means the panels open in unison.
     public static func plan(located: [(cut: ScriptCut, range: TimeRange?, similarity: Double)],
-                            panels: Int) -> PanelPlan {
+                            panels: Int, frameRate: FrameRate,
+                            echo: TimeValue = .zero) -> PanelPlan {
+        func snap(_ time: TimeValue) -> TimeValue {
+            TimeValue(frames: time.nearestFrame(at: frameRate), at: frameRate)
+        }
         var beats: [PanelPlan.Beat] = []
         var unmatched: [String] = []
         // Where each panel has got to in its own take. A panel that has not spoken yet shows its
@@ -80,7 +100,10 @@ public enum PanelAssembler {
                 unmatched.append(entry.cut.text)
                 continue
             }
-            let duration = source.duration
+            let from = snap(source.start)
+            let length = max(snap(source.duration).frame(at: frameRate), 1)
+            let onGrid = TimeRange(start: from, end: from + TimeValue(frames: length, at: frameRate))
+            let duration = onGrid.duration
             let row = entry.cut.panel.row(of: panels)
             // The opening belongs to no panel: every one of them plays.
             let active: Int? = entry.cut.isHook ? nil : row
@@ -89,13 +112,14 @@ public enum PanelAssembler {
                 continue
             }
             beats.append(PanelPlan.Beat(
-                panel: active, text: entry.cut.text, source: source,
+                panel: active, text: entry.cut.text, source: onGrid,
                 timeline: TimeRange(start: playhead, end: playhead + duration),
+                echoStep: active == nil ? snap(echo) : .zero,
                 frozenAt: frozen))
             // Only the panel that spoke advances. That is the pause: the others are exactly where
             // they were, and will carry on from there.
-            if let active { frozen[active] = source.end }
-            else { for p in 0..<panels { frozen[p] = source.end } }
+            if let active { frozen[active] = onGrid.end }
+            else { for p in 0..<panels { frozen[p] = onGrid.end } }
             playhead = playhead + duration
         }
         return PanelPlan(panels: panels, beats: beats, duration: playhead, unmatched: unmatched)

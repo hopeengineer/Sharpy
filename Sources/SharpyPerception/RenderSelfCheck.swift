@@ -16,6 +16,7 @@
 
 import Foundation
 import AVFoundation
+import CoreGraphics
 import SharpyEngine
 import SharpyRender
 
@@ -59,6 +60,68 @@ public enum RenderVerifier {
     /// - Parameter intendedAspect: the shape the caller ASKED for. A reframe that was requested is
     ///   not a fault; only an unexplained change of shape is. Without this the check cries wolf on
     ///   every deliberate 1:1 or 16:9 export, and a check that cries wolf gets switched off.
+    /// Does every band of a stacked layout actually contain a picture?
+    ///
+    /// The failure this edit has is not a wrong colour or a wrong crop, it is a band that never got
+    /// a clip and renders black — and black in one of three panels looks deliberate enough that a
+    /// glance will not catch it. Every other check compares the output against the source as a
+    /// whole and would call a stack "reframed" and pass it.
+    ///
+    /// A band is judged by its variation, not its brightness: a dark room is dim everywhere but
+    /// still varies, while an unwritten band is flat to the bit.
+    public static func bandsCarryPicture(output: URL, bands: Int, samples: Int = 6) throws -> String {
+        let asset = AVURLAsset(url: output)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        let duration = CMTimeGetSeconds(asset.duration)
+        guard duration > 0, bands > 0 else { return "bands: nothing to check" }
+
+        var spreadPerBand = [Double](repeating: 0, count: bands)
+        var counted = 0
+        for i in 0..<samples {
+            // Skipping the first and last instant: a fade or a black tail there is legitimate and
+            // would be reported as an empty band.
+            let at = duration * (Double(i) + 1) / Double(samples + 1)
+            guard let image = try? generator.copyCGImage(at: CMTime(seconds: at, preferredTimescale: 600),
+                                                         actualTime: nil) else { continue }
+            let width = image.width, height = image.height
+            var grey = [UInt8](repeating: 0, count: width * height)
+            guard let context = CGContext(data: &grey, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width,
+                                          space: CGColorSpaceCreateDeviceGray(),
+                                          bitmapInfo: CGImageAlphaInfo.none.rawValue) else { continue }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            counted += 1
+            for band in 0..<bands {
+                let from = height * band / bands, to = height * (band + 1) / bands
+                var sum = 0.0, sumSquares = 0.0, n = 0.0
+                for y in stride(from: from, to: to, by: 3) {
+                    for x in stride(from: 0, to: width, by: 3) {
+                        let value = Double(grey[y * width + x])
+                        sum += value; sumSquares += value * value; n += 1
+                    }
+                }
+                guard n > 0 else { continue }
+                let mean = sum / n
+                spreadPerBand[band] += (sumSquares / n - mean * mean).squareRoot()
+            }
+        }
+        guard counted > 0 else { return "bands: could not read the output" }
+
+        // A single code value everywhere gives a spread of 0. Camera noise alone clears 1; anything
+        // with a person in it is far above. 2 is well clear of noise and well below content.
+        let empty = (0..<bands).filter { spreadPerBand[$0] / Double(counted) < 2 }
+        let detail = (0..<bands).map { String(format: "%d:%.0f", $0 + 1, spreadPerBand[$0] / Double(counted)) }
+            .joined(separator: "  ")
+        if empty.isEmpty {
+            return "bands:     all \(bands) carry picture across \(counted) sampled frame(s)  (spread \(detail))"
+        }
+        return "bands:     BAND \(empty.map { String($0 + 1) }.joined(separator: ", ")) IS BLANK across "
+            + "\(counted) sampled frame(s) — that panel got no clip  (spread \(detail))"
+    }
+
     public static func check(source: URL, output: URL, samples: Int = 8,
                              intendedAspect: Double? = nil) throws -> RenderSelfCheck {
         // One frame every few seconds is plenty: the faults this catches are gross ones.
