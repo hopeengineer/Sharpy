@@ -72,6 +72,20 @@ case "render":
         func t(_ f: Int64) -> TimeValue { TimeValue(frames: f, at: r) }
         var w = src.width, h = src.height
         if let s = option("--size"), let x = s.firstIndex(of: "x"), let ww = Int(s[..<x]), let hh = Int(s[s.index(after: x)...]) { w = ww; h = hh }
+        // --aspect reframes around the SUBJECT rather than centre-cropping, because people do not
+        // stand in the middle of the frame and the one thing a talking-head crop must not do is cut
+        // off the head. Default is the source's own shape.
+        var reframe: Reframing?
+        if let wanted = option("--aspect").flatMap({ Reframer.parse($0) }) {
+            if #available(macOS 26.0, *) {
+                let subject = (try? IndexStore().vision(for: URL(fileURLWithPath: assetPath)).0)
+                    .flatMap { Reframer.subject(in: $0) }
+                let plan = Reframer.plan(sourceWidth: src.width, sourceHeight: src.height,
+                                         targetAspect: wanted, subject: subject)
+                reframe = plan; w = plan.width; h = plan.height
+                print(plan.summary)
+            }
+        }
         let codec: RenderCodec = {
             switch option("--codec") ?? "prores" {
             case "h264": return .h264(bitrate: w * h * 6)
@@ -94,7 +108,9 @@ case "render":
         let total = src.duration.frame(at: r)
         let place = Decision(kind: .cut, at: .zero, params: ["asset": assetPath],
                              basis: .clientRule(rule: "render the asset given on the command line"))
-        try log.append(.placeClip(track: 0, clip: Clip(asset: id, source: TimeRange(start: .zero, end: t(total)), start: .zero), decision: place))
+        // The reframe travels with the VIDEO clip. Audio has no shape to crop, and giving it one
+        // would be meaningless at best.
+        try log.append(.placeClip(track: 0, clip: Clip(asset: id, source: TimeRange(start: .zero, end: t(total)), start: .zero, placement: reframe?.placement), decision: place))
         if let audio {
             // Audio runs to its own duration on its own grid — it rarely ends exactly on a video frame.
             let audioEnd = min(audio.duration, src.duration).alignedToSample(at: sampleRate)
@@ -224,6 +240,16 @@ case "render":
         }
         print(String(format: "rendered:  %d frames + %d audio samples in %.2f s = %.1f fps → %@",
                      report.framesRendered, report.audioSamplesWritten, report.wallSeconds, report.fps, outPath))
+        // LOOK AT WHAT CAME OUT. Not optional, and not on request: every other check passed while
+        // the renderer wrote sideways, cropped frames for an entire session, because none of them
+        // asked whether the output still resembled the input.
+        if #available(macOS 26.0, *), !argv.contains("--no-self-check") {
+            if let check = try? RenderVerifier.check(source: URL(fileURLWithPath: assetPath),
+                                                     output: URL(fileURLWithPath: outPath),
+                                                     intendedAspect: option("--aspect").flatMap { Reframer.parse($0) }) {
+                print(check.summary)
+            }
+        }
         // Printed whenever the guard ran at all — including when it found nothing to check.
         // Suppressing that case is how "nothing was verified" becomes indistinguishable from
         // "nothing was wrong".
@@ -876,7 +902,7 @@ default:
       sharpy version
       sharpy tc <frame> [29.97DF|29.97|23.976|24|25|30|50|59.94DF|59.94|60]
       sharpy probe <file>
-      sharpy render --asset <file> --out <file.mov> [--guard-subjects] [--rate R] [--size WxH] [--codec prores|h264|hevc]
+      sharpy render --asset <file> --out <file.mov> [--aspect 9:16|1:1|16:9] [--guard-subjects] [--rate R] [--size WxH] [--codec prores|h264|hevc]
                     [--cut a-b]... [--loudness broadcast|streaming|<LUFS>]
                     [--remove-fillers] [--remove-words 1,5,10-12] [--tighten-pauses <seconds>]
       sharpy bench --asset <file> [--layers 1,2,4,6] [--frames N] [--color <space>] [--display <space>]

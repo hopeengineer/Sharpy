@@ -49,6 +49,9 @@ public final class SequentialFrameSource: @unchecked Sendable {
     public let url: URL
     public let duration: TimeValue
     public let nominalFrameRate: FrameRate
+    /// Clockwise rotation the container asks for, in degrees: 0, 90, 180 or 270. The decoder does
+    /// not apply it; the renderer must.
+    public let rotationDegrees: Double
     public let width: Int
     public let height: Int
     public let pixelFormat: OSType
@@ -98,6 +101,17 @@ public final class SequentialFrameSource: @unchecked Sendable {
         }
         let size = t.naturalSize.applying(t.preferredTransform)
         width = Int(abs(size.width).rounded()); height = Int(abs(size.height).rounded())
+        // Rotation carried in the container, which the DECODER does not apply.
+        //
+        // Phones record landscape and tag the file "rotate 90"; the pixels stay 3840x2160 and only
+        // the metadata says it is portrait. Using `preferredTransform` to report a 2160x3840 SIZE
+        // while drawing the untouched landscape pixels put a sideways, cropped sliver on screen —
+        // which is what the user saw the moment they watched the first cut. The renderer has to
+        // apply this, so it has to be readable.
+        let transform = t.preferredTransform
+        let radians = atan2(Double(transform.b), Double(transform.a))
+        let degrees = (radians * 180 / .pi).rounded()
+        rotationDegrees = degrees < 0 ? degrees + 360 : degrees
     }
 
     /// The frame containing `time`, or nil past the end.

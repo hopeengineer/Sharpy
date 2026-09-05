@@ -100,7 +100,25 @@ public struct VisionIndexer {
     public let options: VisionIndexOptions
     public init(options: VisionIndexOptions = VisionIndexOptions()) { self.options = options }
 
-    public func index(url: URL, asset: NodeID) throws -> VisionIndex {
+    /// Vision's orientation for a track's container rotation.
+    ///
+    /// The decoder hands back the pixels as stored, so a phone recording tagged "rotate 90" arrives
+    /// LANDSCAPE. Passing `.up` for it — which this did — asked Vision to find upright faces in a
+    /// sideways picture, and reported every box in a coordinate frame the pixels do not use.
+    static func orientation(for track: AVAssetTrack) -> CGImagePropertyOrientation {
+        let t = track.preferredTransform
+        let degrees = (atan2(Double(t.b), Double(t.a)) * 180 / .pi).rounded()
+        switch degrees < 0 ? degrees + 360 : degrees {
+        case 90:  return .right
+        case 180: return .down
+        case 270: return .left
+        default:  return .up
+        }
+    }
+
+    /// - Parameter maximumFrames: stop after this many samples. For a quick comparison a handful is
+    ///   enough, and a check that doubled render time is a check people switch off.
+    public func index(url: URL, asset: NodeID, maximumFrames: Int = .max) throws -> VisionIndex {
         let avAsset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         guard let track = avAsset.tracks(withMediaType: .video).first else { throw VisionIndexError.noVideoTrack(url) }
 
@@ -113,18 +131,21 @@ public struct VisionIndexer {
 
         let size = track.naturalSize.applying(track.preferredTransform)
         let w = Int(abs(size.width).rounded()), h = Int(abs(size.height).rounded())
+        let orientation = VisionIndexer.orientation(for: track)
+        // With the orientation applied, Vision reports boxes in the ROTATED frame — which is the
+        // one `w` and `h` describe, and the one every caller means when it says "where on screen".
         let interval = 1.0 / max(options.samplesPerSecond, 0.0001)
 
         var frames: [FrameObservation] = []
         var nextSampleAt = 0.0
 
-        while let sb = output.copyNextSampleBuffer() {
+        while frames.count < maximumFrames, let sb = output.copyNextSampleBuffer() {
             let pts = CMSampleBufferGetPresentationTimeStamp(sb)
             let seconds = Double(pts.value) / Double(pts.timescale)
             guard seconds + 1e-9 >= nextSampleAt, let pixels = CMSampleBufferGetImageBuffer(sb) else { continue }
             nextSampleAt = seconds + interval
 
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up)
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: orientation)
             var requests: [VNRequest] = []
             let faceRequest = VNDetectFaceRectanglesRequest()
             let textRequest = VNRecognizeTextRequest()

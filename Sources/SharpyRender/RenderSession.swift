@@ -142,22 +142,70 @@ public final class RenderSession {
     /// Resolve a document placement against this render's output size. Aspect is preserved: the
     /// placement states a width, and height follows from the source, because a placement that
     /// stretched faces would be a silent quality fault.
-    private func place(_ p: ClipPlacement, srcWidth: Int, srcHeight: Int) -> LayerPlacement {
+    private func place(_ p: ClipPlacement, srcWidth: Int, srcHeight: Int,
+                       rotation: Double = 0) -> LayerPlacement {
         let outW = Float(options.width), outH = Float(options.height)
+        let quarterTurn = rotation == 90 || rotation == 270
+
+        // A document's crop is stated in DISPLAY space — what the person sees — while the shader
+        // crops the source pixels before rotating them. For a quarter turn those axes are not the
+        // same, so the crop is transformed here rather than making every caller think about it.
+        //
+        // For 90° clockwise a point at source (x, y) lands at display (H − y, x), so:
+        //   display left   trims large source y  -> source bottom
+        //   display right  trims small source y  -> source top
+        //   display top    trims small source x  -> source left
+        //   display bottom trims large source x  -> source right
+        let dl = Float(p.cropLeft.doubleValue), dr = Float(p.cropRight.doubleValue)
+        let dt = Float(p.cropTop.doubleValue), db = Float(p.cropBottom.doubleValue)
+        let crop: SIMD4<Float>          // left, right, top, bottom in SOURCE axes
+        switch rotation {
+        case 90:  crop = SIMD4(dt, db, dr, dl)
+        case 270: crop = SIMD4(db, dt, dl, dr)
+        case 180: crop = SIMD4(dr, dl, db, dt)
+        default:  crop = SIMD4(dl, dr, dt, db)
+        }
+
+        // The visible size after cropping, in display axes.
+        let croppedSrcW = Float(srcWidth) * (1 - crop.x - crop.y)
+        let croppedSrcH = Float(srcHeight) * (1 - crop.z - crop.w)
+        let shownW = quarterTurn ? croppedSrcH : croppedSrcW
+        let shownH = quarterTurn ? croppedSrcW : croppedSrcH
+
+        // A placement states a width in output fractions; height follows, so nothing is stretched.
         let targetW = Float(p.width.doubleValue) * outW
-        let scale = targetW / Float(srcWidth)
-        return LayerPlacement(offset: SIMD2(Float(p.x.doubleValue) * outW,
-                                            Float(p.y.doubleValue) * outH),
+        let scale = targetW / max(shownW, 1)
+        // The shader pivots on `offset + drawn * 0.5` using the UNROTATED drawn size, so the offset
+        // is chosen to put that pivot where the rotated picture should be centred.
+        let drawn = SIMD2(croppedSrcW * scale, croppedSrcH * scale)
+        let wantedCentre = SIMD2(Float(p.x.doubleValue) * outW + shownW * scale / 2,
+                                 Float(p.y.doubleValue) * outH + shownH * scale / 2)
+        return LayerPlacement(offset: wantedCentre - drawn / 2,
                               scale: scale,
-                              opacity: Float(p.opacity.doubleValue))
+                              opacity: Float(p.opacity.doubleValue),
+                              rotation: Float(rotation),
+                              crop: crop)
     }
 
-    /// Placement that fits a source frame into the output while preserving aspect (letterbox/pillarbox).
-    private func fit(_ w: Int, _ h: Int) -> LayerPlacement {
-        let sx = Float(options.width) / Float(w), sy = Float(options.height) / Float(h)
-        let s = min(sx, sy)
-        let ox = (Float(options.width) - Float(w) * s) / 2, oy = (Float(options.height) - Float(h) * s) / 2
-        return LayerPlacement(offset: SIMD2(ox, oy), scale: s, opacity: 1)
+    /// Placement that fits a source frame into the output while preserving aspect, applying the
+    /// container's rotation.
+    ///
+    /// The rotation is not decoration. A phone records landscape pixels and tags the file "rotate
+    /// 90"; ignoring that draws a sideways frame into a portrait canvas and shows a cropped sliver.
+    /// The shader already rotates — nothing was telling it to.
+    private func fit(_ w: Int, _ h: Int, rotation: Double = 0) -> LayerPlacement {
+        let quarterTurn = rotation == 90 || rotation == 270
+        // Fit the frame as it will LOOK, so a quarter turn compares against swapped dimensions.
+        let shownW = quarterTurn ? Float(h) : Float(w)
+        let shownH = quarterTurn ? Float(w) : Float(h)
+        let s = min(Float(options.width) / shownW, Float(options.height) / shownH)
+        // The shader rotates about `offset + drawn * 0.5`, where `drawn` is the UNROTATED size — so
+        // the offset is chosen to put that pivot at the centre of the output. Centring the
+        // unrotated box instead would spin the picture about the wrong point.
+        let drawn = SIMD2(Float(w) * s, Float(h) * s)
+        let centre = SIMD2(Float(options.width) / 2, Float(options.height) / 2)
+        return LayerPlacement(offset: centre - drawn / 2, scale: s,
+                              opacity: 1, rotation: Float(rotation))
     }
 
     /// Sum every audio track over one chunk of the output timeline. A ripple-deleted gap simply
@@ -194,8 +242,16 @@ public final class RenderSession {
             // A clip with no placement fits the frame, as it always has. One with a placement is
             // positioned in output fractions, so the same document delivers correctly at 1080p and
             // 4K without re-authoring.
-            let placement = rl.clip.placement.map { place($0, srcWidth: src.width, srcHeight: src.height) }
-                ?? fit(src.width, src.height)
+            // The DECODED dimensions, not the source's reported ones. `SequentialFrameSource.width`
+            // is `naturalSize` with the rotation applied — 2160x3840 for a phone recording whose
+            // pixels are actually 3840x2160 — and the shader samples the real texture. Fitting
+            // against the reported size scaled the picture by the wrong factor on top of not
+            // rotating it.
+            let decodedW = CVPixelBufferGetWidth(frame.pixelBuffer)
+            let decodedH = CVPixelBufferGetHeight(frame.pixelBuffer)
+            let placement = rl.clip.placement.map {
+                place($0, srcWidth: decodedW, srcHeight: decodedH, rotation: src.rotationDegrees)
+            } ?? fit(decodedW, decodedH, rotation: src.rotationDegrees)
             return CompositeLayer(pixelBuffer: frame.pixelBuffer, placement: placement)
         }
         guard let pool = adaptor.pixelBufferPool else { throw RenderError.poolFailed }
